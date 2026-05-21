@@ -2,6 +2,7 @@ import { RequestError, mapObject } from "../util";
 
 import type { GithubAccount } from "../settings";
 import { PluginSettings } from "../plugin";
+import { getGhTokenSync } from "./gh-token";
 import { issueListSortFromQuery, pullListSortFromQuery, searchSortFromQuery } from "../query/sort";
 import type { QueryParams } from "../query/types";
 import { GitHubApi } from "./api";
@@ -44,7 +45,9 @@ function getToken(org?: string, query?: string): string | undefined {
 	}
 
 	const account = getAccount(_org);
-	return account?.token;
+	if (account?.token) return account.token;
+	if (PluginSettings.useGhCli) return getGhTokenSync() ?? undefined;
+	return undefined;
 }
 
 export function getIssue(org: string, repo: string, issue: number, skipCache = false): Promise<IssueResponse> {

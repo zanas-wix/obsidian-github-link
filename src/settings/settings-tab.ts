@@ -8,6 +8,7 @@ import { PluginData, PluginSettings, getCache } from "../plugin";
 import type { GithubAccount, GithubLinkPluginData } from "./types";
 import { DATA_VERSION, DEFAULT_SETTINGS } from "./types";
 import { AccountSettings } from "./account";
+import { getGhToken } from "../github/gh-token";
 
 export class GithubLinkPluginSettingsTab extends PluginSettingTab {
 	private readonly accountSettings = new AccountSettings(
@@ -67,6 +68,52 @@ export class GithubLinkPluginSettingsTab extends PluginSettingTab {
 			});
 
 		this.accountSettings.render(PluginSettings.accounts);
+
+		containerEl.createEl("h2", { text: "gh CLI authentication" });
+
+		containerEl.createEl("p", {
+			text: "Use the gh CLI's logged-in token as a fallback when no account token matches. Requires gh to be installed and authenticated.",
+		});
+
+		new Setting(containerEl)
+			.setName("Use gh CLI for authentication")
+			.setDesc("Fall back to gh CLI token when no account matches the organization.")
+			.addToggle((toggle) => {
+				toggle.setValue(PluginSettings.useGhCli);
+				toggle.onChange(async (value) => {
+					PluginSettings.useGhCli = value;
+					await this.saveSettings();
+					this.display();
+				});
+			});
+
+		if (PluginSettings.useGhCli) {
+			new Setting(containerEl)
+				.setClass("github-link-sub-setting")
+				.setName("gh binary path")
+				.setDesc("Path to the gh binary. Leave as 'gh' to use $PATH.")
+				.addText((text) => {
+					text.setPlaceholder("gh");
+					text.setValue(PluginSettings.ghCliPath);
+					text.onChange(async (value) => {
+						PluginSettings.ghCliPath = value || "gh";
+						await this.saveSettings();
+					});
+				});
+
+			const statusEl = containerEl.createEl("p", {
+				cls: "setting-item-description github-link-sub-setting",
+				text: "gh CLI status: checking...",
+			});
+
+			getGhToken(true).then((token) => {
+				if (token) {
+					statusEl.setText("gh CLI status: detected (token available)");
+				} else {
+					statusEl.setText("gh CLI status: not found or not authenticated");
+				}
+			});
+		}
 
 		containerEl.createEl("h2", { text: "Other settings" });
 
@@ -131,6 +178,49 @@ export class GithubLinkPluginSettingsTab extends PluginSettingTab {
 				toggle.setValue(PluginSettings.showPagination);
 				toggle.onChange((value) => {
 					PluginSettings.showPagination = value;
+					void this.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Max inline tag characters")
+			.setDesc("Maximum total characters for inline issue/PR tags. Set to 0 to disable truncation.")
+			.addExtraButton((button) => {
+				button.setIcon("rotate-ccw");
+				button.setTooltip("Restore default");
+				button.onClick(async () => {
+					PluginSettings.maxInlineTagChars = DEFAULT_SETTINGS.maxInlineTagChars;
+					await this.saveSettings();
+					this.display();
+				});
+			})
+			.addSlider((slider) => {
+				const manualInput = createEl("input", { attr: { type: "number" }, cls: "github-link-slider-input" });
+				manualInput.value = PluginSettings.maxInlineTagChars.toString();
+				manualInput.addEventListener("change", (e) => {
+					const value = parseInt((e.target as HTMLInputElement).value, 10);
+					PluginSettings.maxInlineTagChars = value;
+					slider.setValue(value);
+					void this.saveSettings();
+				});
+				slider.sliderEl.parentElement?.prepend(manualInput);
+				slider.setLimits(0, 100, 5);
+				slider.setDynamicTooltip();
+				slider.setValue(PluginSettings.maxInlineTagChars);
+				slider.onChange((value) => {
+					manualInput.value = value.toString();
+					PluginSettings.maxInlineTagChars = value;
+					void this.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Strip conventional commit prefix")
+			.setDesc("Remove prefixes like feat(...): or fix: from issue and PR titles in inline tags.")
+			.addToggle((toggle) => {
+				toggle.setValue(PluginSettings.stripConventionalCommitPrefix);
+				toggle.onChange((value) => {
+					PluginSettings.stripConventionalCommitPrefix = value;
 					void this.saveSettings();
 				});
 			});

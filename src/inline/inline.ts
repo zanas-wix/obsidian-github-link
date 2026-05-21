@@ -22,6 +22,10 @@ export function createTag(href: string): HTMLAnchorElement | null {
 	}
 
 	const container = createEl("a", { cls: "github-link-inline", href, attr: { target: "_blank" } });
+	const maxChars = PluginSettings.maxInlineTagChars;
+	if (maxChars > 0) {
+		container.style.setProperty("--max-inline-tag-chars", `${maxChars}`);
+	}
 	const config: TagConfig = {
 		icon: createSpan({ cls: ["github-link-status-icon", "github-link-inline-icon"] }),
 		sections: [],
@@ -100,14 +104,17 @@ function createIssueSection(config: TagConfig, parsedUrl: ParsedUrl, container: 
 	const issueContainer = createSpan({
 		cls: "github-link-inline-issue-title-section",
 	});
-	issueContainer.createSpan({ text: `#${parsedUrl.issue}`, cls: "github-link-inline-issue-number" });
+	const numberSpan = issueContainer.createSpan({ text: `#${parsedUrl.issue}`, cls: "github-link-inline-issue-number" });
 	config.sections.push(issueContainer);
 	if (parsedUrl.org && parsedUrl.repo) {
 		getIssue(parsedUrl.org, parsedUrl.repo, parsedUrl.issue)
 			.then((issue) => {
 				if (issue.title) {
-					const title = createSpan({ text: issue.title, cls: "github-link-inline-issue-title" });
-					issueContainer.prepend(title);
+					const displayTitle = stripConventionalPrefix(issue.title);
+					const title = createSpan({ cls: "github-link-inline-issue-title", text: displayTitle });
+					title.ariaLabel = issue.title;
+					// Number first, then title
+					numberSpan.after(title);
 					const status = getIssueStatus(issue);
 					setIssueIcon(config.icon, status);
 				}
@@ -124,9 +131,9 @@ function createPullRequestSection(config: TagConfig, parsedUrl: ParsedUrl, conta
 	}
 	setPRIcon(config.icon, IssueStatus.Open);
 	const prContainer = createSpan({
-		cls: "github-link-inline-pr-title",
-		text: `${parsedUrl.pr}`,
+		cls: "github-link-inline-pr-title-section",
 	});
+	const numberSpan = prContainer.createSpan({ text: `#${parsedUrl.pr}`, cls: "github-link-inline-pr-number" });
 	config.sections.push(prContainer);
 	if (parsedUrl.org && parsedUrl.repo) {
 		getPullRequest(parsedUrl.org, parsedUrl.repo, parsedUrl.pr)
@@ -134,7 +141,10 @@ function createPullRequestSection(config: TagConfig, parsedUrl: ParsedUrl, conta
 				if (pr.title) {
 					const status = getPRStatus(pr);
 					setPRIcon(config.icon, status);
-					prContainer.setText(pr.title);
+					const displayTitle = stripConventionalPrefix(pr.title);
+					const title = createSpan({ cls: "github-link-inline-pr-title", text: displayTitle });
+					title.ariaLabel = pr.title;
+					numberSpan.after(title);
 				}
 				createPullRequestMergeableSection(config, pr, container);
 			})
@@ -189,6 +199,13 @@ function createErrorSection(config: TagConfig, container: HTMLAnchorElement, err
 	}
 	config.sections.push(errorIcon);
 	container.appendChild(createTagSection(errorIcon));
+}
+
+const conventionalCommitRegex = /^\w+(?:\([^)]*\))?!?:\s*/;
+
+function stripConventionalPrefix(title: string): string {
+	if (!PluginSettings.stripConventionalCommitPrefix) return title;
+	return title.replace(conventionalCommitRegex, "");
 }
 
 export function InlineRenderer(el: HTMLElement) {

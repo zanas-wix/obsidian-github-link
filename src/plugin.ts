@@ -10,6 +10,7 @@ import { createInlineViewPlugin } from "./inline/view-plugin";
 import { RequestCache } from "./github/cache";
 import { QueryProcessor } from "./query/processor";
 import { DATA_VERSION } from "./settings/types";
+import { getGhToken } from "./github/gh-token";
 
 export const PluginSettings: GithubLinkPluginSettings = { ...DEFAULT_SETTINGS };
 export const PluginData: GithubLinkPluginData = { cache: null, settings: PluginSettings, dataVersion: DATA_VERSION };
@@ -58,6 +59,11 @@ export class GithubLinkPlugin extends Plugin {
 		this.registerEditorExtension(createInlineViewPlugin(this));
 		this.registerMarkdownCodeBlockProcessor("github-query", QueryProcessor);
 		this.setCacheInterval();
+
+		// Prefetch gh CLI token so the first link preview doesn't pay the subprocess cost
+		if (PluginSettings.useGhCli) {
+			void getGhToken();
+		}
 	}
 
 	/**

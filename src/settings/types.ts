@@ -32,6 +32,10 @@ export interface GithubLinkPluginSettings {
 	cacheIntervalSeconds: number;
 	maxCacheAgeHours: number;
 	minRequestSeconds: number;
+	useGhCli: boolean;
+	ghCliPath: string;
+	maxInlineTagChars: number;
+	stripConventionalCommitPrefix: boolean;
 }
 
 export const DEFAULT_SETTINGS: GithubLinkPluginSettings = {
@@ -48,4 +52,8 @@ export const DEFAULT_SETTINGS: GithubLinkPluginSettings = {
 	cacheIntervalSeconds: 60,
 	maxCacheAgeHours: 120,
 	minRequestSeconds: 60,
+	useGhCli: true,
+	ghCliPath: "gh",
+	maxInlineTagChars: 40,
+	stripConventionalCommitPrefix: false,
 };

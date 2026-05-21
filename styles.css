@@ -163,7 +163,7 @@ body.theme-dark {
 	text-decoration: none;
 	color: var(--gh-color-fg-default);
 	align-items: stretch;
-	max-width: 100%;
+	max-width: min(100%, calc(var(--max-inline-tag-chars, 9999) * 1ch));
 	font-size: 0.75em;
 }
 
@@ -279,20 +279,36 @@ body.theme-dark {
 .github-link-inline-pr-title,
 .github-link-inline-issue-title,
 .github-link-inline-issue-title-section,
+.github-link-inline-pr-title-section,
 .github-link-inline-file {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	text-wrap: nowrap;
 	line-height: var(--line-height-normal);
 }
-.github-link-inline-issue-number {
+.github-link-inline-issue-number,
+.github-link-inline-pr-number {
 	color: var(--gh-color-fg-muted);
+	flex-shrink: 0;
 }
 
-.github-link-inline-file,
-.github-link-inline-issue-title-section {
+.github-link-inline-file {
 	display: flex;
 	gap: 2px;
+}
+
+.github-link-inline-issue-title-section,
+.github-link-inline-pr-title-section {
+	display: flex;
+	gap: 4px;
+	min-width: 0;
+}
+
+.github-link-inline-section:has(> .github-link-inline-issue-title-section),
+.github-link-inline-section:has(> .github-link-inline-pr-title-section) {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
 }
 .github-link-inline-file > .github-link-inline-file-line-number,
 .github-link-inline-file > .github-link-inline-file-branch {

@@ -4,6 +4,7 @@ import { Notice, requestUrl } from "obsidian";
 import Queue from "queue";
 import { PluginSettings, getCache, logger } from "../plugin";
 import { RequestError, isSuccessResponse, promiseWithResolvers } from "../util";
+import { getGhTokenPending, getGhTokenSync, refreshGhToken } from "./gh-token";
 import type {
 	CheckRunListResponse,
 	CodeResponse,
@@ -206,6 +207,7 @@ export class GitHubApi {
 		_config: RequestUrlParam,
 		token?: string,
 		skipCache = false,
+		_retried = false,
 	): Promise<MaybePaginated<RequestUrlResponse>> {
 		if (GitHubApi.rateLimitReset !== null && GitHubApi.rateLimitReset > new Date()) {
 			logger.warn(
@@ -217,7 +219,16 @@ export class GitHubApi {
 			GitHubApi.rateLimitReset = null;
 		}
 
-		const config = this.initHeaders(_config, token);
+		// If no token yet and a gh CLI fetch is in-flight, wait for it
+		let _token = token;
+		if (!_token && PluginSettings.useGhCli) {
+			const pending = getGhTokenPending();
+			if (pending) {
+				_token = (await pending) ?? undefined;
+			}
+		}
+
+		const config = this.initHeaders(_config, _token);
 		let cachedValue: CacheEntry | null = null;
 
 		if (!skipCache) {
@@ -268,7 +279,15 @@ export class GitHubApi {
 			return this.getPaginationMeta(response);
 		} catch (err) {
 			logger.debug(err);
-			return Promise.reject(new RequestError(err as Error));
+			const reqErr = new RequestError(err as Error);
+			// On 401, try refreshing the gh CLI token once and retry
+			if (!_retried && reqErr.status === 401 && PluginSettings.useGhCli) {
+				logger.info("Got 401, refreshing gh CLI token and retrying");
+				await refreshGhToken();
+				const freshToken = getGhTokenSync() ?? undefined;
+				return this.githubRequest(_config, freshToken, skipCache, true);
+			}
+			return Promise.reject(reqErr);
 		}
 	}
 
