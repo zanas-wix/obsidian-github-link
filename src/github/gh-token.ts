@@ -6,12 +6,7 @@ let cached: string | null | undefined;
 let pendingFetch: Promise<string | null> | null = null;
 
 // macOS GUI apps get a minimal PATH; add common locations where gh is installed
-const EXTRA_PATHS = [
-	"/opt/homebrew/bin",
-	"/usr/local/bin",
-	"/usr/bin",
-	"/bin",
-];
+const EXTRA_PATHS = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"];
 
 function enrichedPath(): string {
 	const existing = process?.env?.PATH ?? "";

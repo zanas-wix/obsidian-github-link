@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { PullDetail } from "../github/pull-detail";
-import { getMergeAction } from "./merge-action";
+import { getDraftAction, getMergeAction } from "./merge-action";
 
 const ready = {
 	state: "open",
@@ -50,5 +50,17 @@ describe("getMergeAction", () => {
 		});
 		expect(getMergeAction({ ...ready, squashAllowed: false, canEnableAutoMerge: false })).toEqual({ kind: "none" });
 		expect(getMergeAction({ ...ready, state: "merged" } as unknown as PullDetail)).toEqual({ kind: "none" });
+	});
+});
+
+describe("getDraftAction", () => {
+	it("marks a draft ready and turns a ready pull request back into a draft", () => {
+		expect(getDraftAction({ ...ready, draft: true, canUpdate: true } as unknown as PullDetail)).toBe("ready");
+		expect(getDraftAction({ ...ready, draft: false, canUpdate: true } as unknown as PullDetail)).toBe("draft");
+	});
+
+	it("offers nothing without edit rights or once the pull request is closed", () => {
+		expect(getDraftAction({ ...ready, canUpdate: false } as unknown as PullDetail)).toBeNull();
+		expect(getDraftAction({ ...ready, canUpdate: true, state: "merged" } as unknown as PullDetail)).toBeNull();
 	});
 });

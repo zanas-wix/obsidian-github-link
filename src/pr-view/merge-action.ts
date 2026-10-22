@@ -27,3 +27,14 @@ export function getMergeAction(pull: PullDetail): MergeAction {
 	}
 	return pull.canEnableAutoMerge ? { kind: "enable-auto-merge" } : { kind: "none" };
 }
+
+/**
+ * Draft state switch for an open pull request the viewer can edit: a draft can be marked ready,
+ * anything else can be turned back into a draft.
+ */
+export function getDraftAction(pull: PullDetail): "ready" | "draft" | null {
+	if (pull.state !== "open" || !pull.canUpdate) {
+		return null;
+	}
+	return pull.draft ? "ready" : "draft";
+}

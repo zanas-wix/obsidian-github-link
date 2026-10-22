@@ -72,6 +72,8 @@ export interface PullDetail {
 	canEnableAutoMerge: boolean;
 	canDisableAutoMerge: boolean;
 	squashAllowed: boolean;
+	/** Whether the viewer may edit the pull request, which is what changing its draft state needs */
+	canUpdate: boolean;
 }
 
 /** Newest comments and reviews are what matter in a long PR, so those lists take `last`, not `first` */
@@ -86,7 +88,7 @@ export function buildPullDetailQuery(ref: PullRef): string {
 			${author}
 			baseRefName headRefName additions deletions changedFiles
 			reviewDecision mergeable mergeStateStatus
-			id viewerCanEnableAutoMerge viewerCanDisableAutoMerge
+			id viewerCanEnableAutoMerge viewerCanDisableAutoMerge viewerCanUpdate
 			autoMergeRequest { mergeMethod enabledBy { login } }
 			labels(first: 20) { nodes { name color } }
 			reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
@@ -140,6 +142,7 @@ interface RawPull {
 	autoMergeRequest?: { mergeMethod: string; enabledBy?: { login?: string } | null } | null;
 	viewerCanEnableAutoMerge?: boolean;
 	viewerCanDisableAutoMerge?: boolean;
+	viewerCanUpdate?: boolean;
 	reviewDecision?: string | null;
 	mergeable?: string;
 	mergeStateStatus?: string;
@@ -279,6 +282,7 @@ export function parsePullDetail(ref: PullRef, data: PullDetailResponse): PullDet
 		canEnableAutoMerge: Boolean(pull.viewerCanEnableAutoMerge) && Boolean(data.repository?.autoMergeAllowed),
 		canDisableAutoMerge: Boolean(pull.viewerCanDisableAutoMerge),
 		squashAllowed: Boolean(data.repository?.squashMergeAllowed),
+		canUpdate: Boolean(pull.viewerCanUpdate),
 	};
 }
 

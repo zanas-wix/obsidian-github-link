@@ -6,7 +6,7 @@ import { getGhTokenSync } from "./gh-token";
 import { issueListSortFromQuery, pullListSortFromQuery, searchSortFromQuery } from "../query/sort";
 import type { QueryParams } from "../query/types";
 import { buildPullDetailQuery, parsePullDetail, type PullDetail, type PullDetailResponse } from "./pull-detail";
-import { buildAutoMergeMutation, buildMergeMutation } from "./pull-actions";
+import { buildAutoMergeMutation, buildDraftMutation, buildMergeMutation } from "./pull-actions";
 import { buildPullStatusQuery, parsePullStatuses, pullKey, type PullRef, type PullStatus } from "./pull-status";
 import { GitHubApi } from "./api";
 import type {
@@ -51,6 +51,14 @@ export async function squashMergePullRequest(ref: PullRef, nodeId: string): Prom
 
 export async function setPullAutoMerge(ref: PullRef, nodeId: string, enable: boolean): Promise<void> {
 	await api.graphql(buildAutoMergeMutation(nodeId, enable), getToken(ref.org));
+	pullStatusCache.delete(pullKey(ref));
+}
+
+/**
+ * `draft: true` converts to a draft, `false` marks the pull request ready for review.
+ */
+export async function setPullDraft(ref: PullRef, nodeId: string, draft: boolean): Promise<void> {
+	await api.graphql(buildDraftMutation(nodeId, draft), getToken(ref.org));
 	pullStatusCache.delete(pullKey(ref));
 }
 

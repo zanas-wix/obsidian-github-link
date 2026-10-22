@@ -8,13 +8,13 @@ import {
 	type ViewStateResult,
 	type WorkspaceLeaf,
 } from "obsidian";
-import { getPullDetail, setPullAutoMerge, squashMergePullRequest } from "../github/github";
+import { getPullDetail, setPullAutoMerge, setPullDraft, squashMergePullRequest } from "../github/github";
 import type { CheckState, PullDetail, ReviewState, TimelineComment, TimelineItem } from "../github/pull-detail";
 import { pullKey, type PullRef } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
 import { setPRIcon } from "../icon";
 import { relativeTime } from "../util";
-import { getMergeAction } from "./merge-action";
+import { getDraftAction, getMergeAction } from "./merge-action";
 import { getReadiness, type Tone } from "./readiness";
 import { setPaneSelection } from "./selection";
 
@@ -264,13 +264,19 @@ export class PullRequestView extends ItemView {
 				this.copy(lines.join("\n"), `Copied ${lines.length} stacked PRs`);
 			});
 		}
+		if (getDraftAction(pull) === "draft") {
+			const toDraft = this.action(actions, "lucide-git-pull-request-draft", "Convert to draft", () =>
+				this.setDraft(toDraft, pull, true),
+			);
+		}
 		this.action(actions, "lucide-refresh-cw", "Refresh", () => void this.refresh(false));
 	}
 
-	private action(parent: HTMLElement, icon: string, label: string, onClick: () => void): void {
+	private action(parent: HTMLElement, icon: string, label: string, onClick: () => void): HTMLButtonElement {
 		const button = parent.createEl("button", { cls: "clickable-icon", attr: { "aria-label": label } });
 		setIcon(button, icon);
 		button.addEventListener("click", onClick);
+		return button;
 	}
 
 	private copy(text: string, notice: string): void {
@@ -351,6 +357,13 @@ export class PullRequestView extends ItemView {
 	}
 
 	private renderMergeAction(parent: HTMLElement, pull: PullDetail): void {
+		// A draft cannot be merged or set to auto-merge, so marking it ready is its one action
+		if (getDraftAction(pull) === "ready") {
+			const button = this.actionButton(parent, "Ready for review", "lucide-eye", true);
+			button.addEventListener("click", () => this.setDraft(button, pull, false));
+			return;
+		}
+
 		const action = getMergeAction(pull);
 		if (action.kind === "none") {
 			return;
@@ -365,40 +378,18 @@ export class PullRequestView extends ItemView {
 			"enable-auto-merge": "lucide-zap",
 			"disable-auto-merge": "lucide-zap-off",
 		}[action.kind];
+		const button = this.actionButton(parent, label, icon, action.kind === "merge");
 
-		const button = parent.createEl("button", {
-			cls: action.kind === "merge" ? "mod-cta" : "",
-			attr: { "aria-label": label },
-		});
-		setIcon(button.createSpan(), icon);
-		button.createSpan({ text: label });
-
-		const run = async () => {
-			button.disabled = true;
-			button.addClass("is-loading");
-			try {
+		const run = () =>
+			this.runAction(button, label, async () => {
 				if (action.kind === "merge") {
 					await squashMergePullRequest(pull.ref, pull.nodeId);
-					new Notice(`Squash-merged #${pull.ref.number}`);
-				} else {
-					await setPullAutoMerge(pull.ref, pull.nodeId, action.kind === "enable-auto-merge");
-					new Notice(
-						`Auto-merge ${action.kind === "enable-auto-merge" ? "enabled" : "disabled"} for #${pull.ref.number}`,
-					);
+					return `Squash-merged #${pull.ref.number}`;
 				}
-				await this.refresh(false);
-			} catch (error) {
-				const message =
-					error instanceof Error
-						? error.message
-						: typeof error === "object" && error && "message" in error
-							? String(error.message)
-							: "unknown error";
-				new Notice(`GitHub Link: ${label} failed: ${message}`, 8000);
-				button.disabled = false;
-				button.removeClass("is-loading");
-			}
-		};
+				const enable = action.kind === "enable-auto-merge";
+				await setPullAutoMerge(pull.ref, pull.nodeId, enable);
+				return `Auto-merge ${enable ? "enabled" : "disabled"} for #${pull.ref.number}`;
+			});
 		button.addEventListener("click", () => {
 			if (action.kind === "merge") {
 				// Merging cannot be undone, unlike auto-merge
@@ -412,6 +403,44 @@ export class PullRequestView extends ItemView {
 				void run();
 			}
 		});
+	}
+
+	private actionButton(parent: HTMLElement, label: string, icon: string, primary: boolean): HTMLButtonElement {
+		const button = parent.createEl("button", { cls: primary ? "mod-cta" : "", attr: { "aria-label": label } });
+		setIcon(button.createSpan(), icon);
+		button.createSpan({ text: label });
+		return button;
+	}
+
+	private setDraft(button: HTMLElement, pull: PullDetail, draft: boolean): void {
+		const label = draft ? "Convert to draft" : "Ready for review";
+		void this.runAction(button, label, async () => {
+			await setPullDraft(pull.ref, pull.nodeId, draft);
+			return draft ? `#${pull.ref.number} is a draft again` : `#${pull.ref.number} is ready for review`;
+		});
+	}
+
+	/**
+	 * Run a change to the pull request with the button locked meanwhile, then reload the pane. A failure
+	 * is shown as a notice with GitHub's message and unlocks the button.
+	 */
+	private async runAction(button: HTMLElement, label: string, task: () => Promise<string>): Promise<void> {
+		button.setAttribute("disabled", "");
+		button.addClass("is-loading");
+		try {
+			new Notice(await task());
+			await this.refresh(false);
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: typeof error === "object" && error && "message" in error
+						? String(error.message)
+						: "unknown error";
+			new Notice(`GitHub Link: ${label} failed: ${message}`, 8000);
+			button.removeAttribute("disabled");
+			button.removeClass("is-loading");
+		}
 	}
 
 	private renderStack(parent: HTMLElement, pull: PullDetail): void {

@@ -22,3 +22,13 @@ export function buildAutoMergeMutation(nodeId: string, enable: boolean): string 
 		? `mutation { enablePullRequestAutoMerge(input: { pullRequestId: "${id}", mergeMethod: SQUASH }) { pullRequest { id } } }`
 		: `mutation { disablePullRequestAutoMerge(input: { pullRequestId: "${id}" }) { pullRequest { id } } }`;
 }
+
+/**
+ * `draft: true` converts to a draft, `false` marks it ready for review
+ */
+export function buildDraftMutation(nodeId: string, draft: boolean): string {
+	const id = validNodeId(nodeId);
+	return draft
+		? `mutation { convertPullRequestToDraft(input: { pullRequestId: "${id}" }) { pullRequest { id } } }`
+		: `mutation { markPullRequestReadyForReview(input: { pullRequestId: "${id}" }) { pullRequest { id } } }`;
+}
