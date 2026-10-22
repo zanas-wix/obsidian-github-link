@@ -43,6 +43,18 @@ Queries may use `OR`, with parentheses to group: `query: "is:pr is:open (author:
 
 For `pull-request` queries, the columns `review` (approved / changes requested / review required), `ci` (checks passed/total, coloured by the overall result) and `merge` (mergeable / conflicts) show whether a PR is ready to merge. Add them to `columns`, e.g. `columns: [number, title, review, ci, merge]`. They are loaded in batches with a single GraphQL request per 25 PRs, which needs a token (an account token or the gh CLI). In cards they appear on the right of each card. Add `statusRefresh: 60` to re-check them every 60 seconds (minimum 30): one batched request per 25 open PRs, paused while the window is hidden, and backing off after failures. Each card also has a refresh icon for a single PR.
 
+### Pull request pane
+
+In cards view, click a pull request card (anywhere except a link or button) to open it in a side pane; the pane follows whichever card you click, and the command "Open pull request pane" reveals it. It shows, from a single GraphQL request:
+
+- a merge-readiness checklist (draft, review decision, checks, conflicts, behind base, unresolved conversations)
+- the PR's stack, with one click to jump between its PRs and a button to copy the stack as a Markdown list
+- reviewers and requested reviewers, all checks (failing first, linking to their details), and the description
+- the conversation: comments, reviews and inline review threads with the code they refer to, resolved threads collapsed, and an "only unresolved" filter
+- changed files with a +/- bar
+
+Buttons copy the PR as a Markdown link, open it on GitHub, or refresh it. A visible pane re-checks its PR every minute.
+
 See the [documentation](https://github.com/nathonius/obsidian-github-link/wiki) for more info.
 
 ## Updates

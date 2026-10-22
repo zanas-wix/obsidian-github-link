@@ -9,8 +9,8 @@ import {
 	getPullStatuses,
 } from "../github/github";
 import { pullKey, rowPullStatuses, STATUS_COLUMNS, type PullRef } from "../github/pull-status";
-import type { MaybePaginated, PaginationMeta } from "../github/response";
-import { PluginSettings } from "../plugin";
+import { getSearchResultPRStatus, type MaybePaginated, type PaginationMeta } from "../github/response";
+import { openPullRequestPane, PluginSettings } from "../plugin";
 import { getProp, isEqual, relativeTime, titleCase } from "../util";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
 import { expandOrQuery } from "./or-query";
@@ -28,6 +28,45 @@ const INITIAL_STATUS_MAX_AGE_MS = 10 * 1000;
 
 export class GithubQuery {
 	private statusMaxAgeMs = INITIAL_STATUS_MAX_AGE_MS;
+	private selectedCard: HTMLElement | null = null;
+
+	/**
+	 * Clicking a card (anywhere but a link or button) shows its pull request in the side pane and marks
+	 * the card as selected. The pane also gets the stack the PR belongs to, for its stack navigator.
+	 */
+	private makeCardOpenPane(card: HTMLElement, row: TableResult[number], rows: TableResult[number][]): void {
+		const [org, repo] = this.getRepoFullName(row)?.split("/") ?? [];
+		if (!org || !repo) {
+			return;
+		}
+		card.addClass("is-clickable");
+		card.addEventListener("click", (event) => {
+			if ((event.target as HTMLElement).closest("a, button, summary")) {
+				return;
+			}
+			this.selectedCard?.removeClass("is-selected");
+			this.selectedCard = card;
+			card.addClass("is-selected");
+
+			const stack = rowStackPositions.get(row);
+			const start = stack ? rows.indexOf(row) - (stack.position - 1) : -1;
+			const members = stack ? rows.slice(start, start + stack.size) : [];
+			const siblings = members.flatMap((member) => {
+				const [memberOrg, memberRepo] = this.getRepoFullName(member)?.split("/") ?? [];
+				return memberOrg && memberRepo
+					? [
+							{
+								ref: { org: memberOrg, repo: memberRepo, number: member.number },
+								title: member.title,
+								status: getSearchResultPRStatus(member),
+							},
+						]
+					: [];
+			});
+			void openPullRequestPane({ ref: { org, repo, number: row.number }, stack: siblings });
+		});
+	}
+
 	private params!: QueryParams;
 	private result: TableResult | null = null;
 	private resultMeta: PaginationMeta | null = null;
@@ -472,6 +511,9 @@ export class GithubQuery {
 			if (stack) {
 				card.style.setProperty("--stack-depth", `${stack.depth}`);
 				card.toggleClass("github-link-card-nested", stack.depth > 0);
+			}
+			if (queryType === QueryType.PullRequest) {
+				this.makeCardOpenPane(card, row, rows);
 			}
 
 			if (statusRenderer) {

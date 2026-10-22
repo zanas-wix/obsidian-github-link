@@ -5,6 +5,9 @@ import { PluginSettingTabMock } from "./obsidian/PluginSettingTab";
 import { NoticeMock } from "./obsidian/Notice";
 import { setIconMock } from "./obsidian/setIcon";
 
+class ItemViewMock {}
+const MarkdownRendererMock = { render: () => Promise.resolve() };
+
 module.exports = {
 	App: AppMock,
 	Plugin: PluginMock,
@@ -12,4 +15,6 @@ module.exports = {
 	PluginSettingTab: PluginSettingTabMock,
 	Notice: NoticeMock,
 	setIcon: setIconMock,
+	ItemView: ItemViewMock,
+	MarkdownRenderer: MarkdownRendererMock,
 };

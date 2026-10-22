@@ -12,7 +12,6 @@ import type {
 	ObsidianProtocolHandler,
 	Plugin,
 	PluginManifest,
-	ViewCreator,
 } from "obsidian";
 
 export class PluginMock implements Plugin {
@@ -30,6 +29,8 @@ export class PluginMock implements Plugin {
 	public registerMarkdownPostProcessor = jest.fn(() => {
 		return jest.fn(() => Promise.resolve());
 	});
+	public addCommand = jest.fn((command: Command) => command);
+	public registerView = jest.fn();
 
 	constructor(
 		public app: App,
@@ -40,12 +41,6 @@ export class PluginMock implements Plugin {
 		throw new Error("Method not implemented.");
 	}
 	addStatusBarItem(): HTMLElement {
-		throw new Error("Method not implemented.");
-	}
-	addCommand(command: Command): Command {
-		throw new Error("Method not implemented.");
-	}
-	registerView(type: string, viewCreator: ViewCreator): void {
 		throw new Error("Method not implemented.");
 	}
 	registerHoverLinkSource(id: string, info: HoverLinkSource): void {

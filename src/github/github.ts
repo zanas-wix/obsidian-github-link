@@ -5,6 +5,7 @@ import { PluginSettings } from "../plugin";
 import { getGhTokenSync } from "./gh-token";
 import { issueListSortFromQuery, pullListSortFromQuery, searchSortFromQuery } from "../query/sort";
 import type { QueryParams } from "../query/types";
+import { buildPullDetailQuery, parsePullDetail, type PullDetail, type PullDetailResponse } from "./pull-detail";
 import { buildPullStatusQuery, parsePullStatuses, pullKey, type PullRef, type PullStatus } from "./pull-status";
 import { GitHubApi } from "./api";
 import type {
@@ -26,6 +27,18 @@ import type {
 
 const tokenMatchRegex = /repo:(.+)\//;
 const api = new GitHubApi();
+
+/**
+ * Everything the pull request pane shows, in one request. Never cached: the pane is a live view.
+ */
+export async function getPullDetail(ref: PullRef): Promise<PullDetail> {
+	const data = await api.graphql<PullDetailResponse>(buildPullDetailQuery(ref), getToken(ref.org));
+	const detail = parsePullDetail(ref, data);
+	if (!detail) {
+		throw new Error(`Pull request ${pullKey(ref)} was not found, or you have no access to it.`);
+	}
+	return detail;
+}
 
 const PULL_STATUS_BATCH_SIZE = 25;
 

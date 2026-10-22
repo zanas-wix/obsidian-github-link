@@ -11,6 +11,7 @@ import { RequestCache } from "./github/cache";
 import { QueryProcessor } from "./query/processor";
 import { DATA_VERSION } from "./settings/types";
 import { getGhToken } from "./github/gh-token";
+import { PullRequestView, PULL_VIEW_TYPE, type PullPaneTarget } from "./pr-view/pr-view";
 
 export const PluginSettings: GithubLinkPluginSettings = { ...DEFAULT_SETTINGS };
 export const PluginData: GithubLinkPluginData = { cache: null, settings: PluginSettings, dataVersion: DATA_VERSION };
@@ -20,8 +21,38 @@ export function getCache(): RequestCache {
 	return cache;
 }
 
+let pluginInstance: GithubLinkPlugin | null = null;
+
+/**
+ * Open a pull request in the side pane (used by query cards). Does nothing before the plugin has loaded.
+ */
+export async function openPullRequestPane(target?: PullPaneTarget): Promise<void> {
+	await pluginInstance?.openPullRequestPane(target);
+}
+
 export class GithubLinkPlugin extends Plugin {
 	public cacheInterval: number | undefined;
+
+	/**
+	 * Show a pull request in the side pane, reusing the open pane if there is one. Without a target the
+	 * pane is just revealed.
+	 */
+	public async openPullRequestPane(target?: PullPaneTarget): Promise<void> {
+		const { workspace } = this.app;
+		let leaf = workspace.getLeavesOfType(PULL_VIEW_TYPE)[0] ?? null;
+		if (!leaf) {
+			leaf = workspace.getRightLeaf(false);
+			if (!leaf) {
+				new Notice("GitHub Link: could not open a side pane.");
+				return;
+			}
+			await leaf.setViewState({ type: PULL_VIEW_TYPE, active: true });
+		}
+		void workspace.revealLeaf(leaf);
+		if (target && leaf.view instanceof PullRequestView) {
+			await leaf.view.setTarget(target);
+		}
+	}
 
 	private async saveCacheIfUpdated(): Promise<void> {
 		if (cache.cacheUpdated) {
@@ -33,6 +64,7 @@ export class GithubLinkPlugin extends Plugin {
 	}
 
 	async onload() {
+		pluginInstance = this;
 		const data = (await this.loadData()) || {};
 
 		Object.assign(PluginSettings, data.settings);
@@ -68,6 +100,12 @@ export class GithubLinkPlugin extends Plugin {
 		this.registerMarkdownPostProcessor(InlineRenderer);
 		this.registerEditorExtension(createInlineViewPlugin(this));
 		this.registerMarkdownCodeBlockProcessor("github-query", QueryProcessor);
+		this.registerView(PULL_VIEW_TYPE, (leaf) => new PullRequestView(leaf));
+		this.addCommand({
+			id: "open-pull-request-pane",
+			name: "Open pull request pane",
+			callback: () => void openPullRequestPane(),
+		});
 		this.setCacheInterval();
 
 		// Prefetch gh CLI token so the first link preview doesn't pay the subprocess cost

@@ -26,14 +26,21 @@ export function pullKey(ref: PullRef): string {
 }
 
 /**
+ * Owner and repo names are interpolated into GraphQL documents, so anything that is not a plain
+ * GitHub name is rejected.
+ */
+export function validatePullRef(ref: PullRef): void {
+	if (!NAME.test(ref.org) || !NAME.test(ref.repo) || !Number.isInteger(ref.number)) {
+		throw new Error(`Invalid pull request reference: ${pullKey(ref)}`);
+	}
+}
+
+/**
  * One GraphQL document asking for every given PR, aliased `p0`, `p1`, ...
- * Owner and repo names are interpolated, so anything that is not a plain GitHub name is rejected.
  */
 export function buildPullStatusQuery(refs: PullRef[]): string {
 	const fields = refs.map((ref, i) => {
-		if (!NAME.test(ref.org) || !NAME.test(ref.repo) || !Number.isInteger(ref.number)) {
-			throw new Error(`Invalid pull request reference: ${pullKey(ref)}`);
-		}
+		validatePullRef(ref);
 		return `p${i}: repository(owner: "${ref.org}", name: "${ref.repo}") {
 	pullRequest(number: ${ref.number}) {
 		reviewDecision
