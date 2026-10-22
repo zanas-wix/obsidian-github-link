@@ -6,6 +6,7 @@ import { NoticeMock } from "./obsidian/Notice";
 import { setIconMock } from "./obsidian/setIcon";
 
 class ItemViewMock {}
+class MenuMock {}
 const MarkdownRendererMock = { render: () => Promise.resolve() };
 
 module.exports = {
@@ -17,4 +18,5 @@ module.exports = {
 	setIcon: setIconMock,
 	ItemView: ItemViewMock,
 	MarkdownRenderer: MarkdownRendererMock,
+	Menu: MenuMock,
 };

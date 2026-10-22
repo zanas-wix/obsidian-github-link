@@ -6,7 +6,7 @@ import { getGhTokenSync } from "./gh-token";
 import { issueListSortFromQuery, pullListSortFromQuery, searchSortFromQuery } from "../query/sort";
 import type { QueryParams } from "../query/types";
 import { buildPullDetailQuery, parsePullDetail, type PullDetail, type PullDetailResponse } from "./pull-detail";
-import { buildAutoMergeMutation, buildDraftMutation, buildMergeMutation } from "./pull-actions";
+import { buildAutoMergeMutation, buildCommentMutation, buildDraftMutation, buildMergeMutation } from "./pull-actions";
 import { buildPullStatusQuery, parsePullStatuses, pullKey, type PullRef, type PullStatus } from "./pull-status";
 import { GitHubApi } from "./api";
 import type {
@@ -59,6 +59,15 @@ export async function setPullAutoMerge(ref: PullRef, nodeId: string, enable: boo
  */
 export async function setPullDraft(ref: PullRef, nodeId: string, draft: boolean): Promise<void> {
 	await api.graphql(buildDraftMutation(nodeId, draft), getToken(ref.org));
+	pullStatusCache.delete(pullKey(ref));
+}
+
+/**
+ * Post a comment. Comments such as #rebuild or #skipreview change CI and review state, so the cached
+ * status of the PR is dropped.
+ */
+export async function postPullComment(ref: PullRef, nodeId: string, body: string): Promise<void> {
+	await api.graphql(buildCommentMutation(nodeId, body), getToken(ref.org));
 	pullStatusCache.delete(pullKey(ref));
 }
 

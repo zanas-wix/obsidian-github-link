@@ -1,6 +1,7 @@
 import {
 	ItemView,
 	MarkdownRenderer,
+	Menu,
 	Modal,
 	Notice,
 	setIcon,
@@ -8,13 +9,20 @@ import {
 	type ViewStateResult,
 	type WorkspaceLeaf,
 } from "obsidian";
-import { getPullDetail, setPullAutoMerge, setPullDraft, squashMergePullRequest } from "../github/github";
+import {
+	getPullDetail,
+	postPullComment,
+	setPullAutoMerge,
+	setPullDraft,
+	squashMergePullRequest,
+} from "../github/github";
 import type { CheckState, PullDetail, ReviewState, TimelineComment, TimelineItem } from "../github/pull-detail";
 import { pullKey, type PullRef } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
 import { setPRIcon } from "../icon";
 import { relativeTime } from "../util";
 import { getDraftAction, getMergeAction } from "./merge-action";
+import { QUICK_COMMENTS } from "./quick-comments";
 import { getReadiness, type Tone } from "./readiness";
 import { setPaneSelection } from "./selection";
 
@@ -349,7 +357,55 @@ export class PullRequestView extends ItemView {
 			this.chip(chips, "success", "Auto-merge on");
 		}
 
-		this.renderMergeAction(bar, pull);
+		const actions = bar.createDiv({ cls: "github-link-pr-bar-actions" });
+		this.renderCommentMenu(actions, pull);
+		this.renderMergeAction(actions, pull);
+	}
+
+	/**
+	 * Dropdown of comments that trigger automation (#skipreview, #rebuild), plus a free-form comment.
+	 */
+	private renderCommentMenu(parent: HTMLElement, pull: PullDetail): void {
+		const button = parent.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Post a comment" } });
+		setIcon(button.createSpan(), "lucide-message-square-plus");
+		setIcon(button.createSpan(), "lucide-chevron-down");
+
+		const post = (body: string) =>
+			void this.runAction(button, "Post comment", async () => {
+				await postPullComment(pull.ref, pull.nodeId, body);
+				return `Posted "${body.length > 30 ? `${body.slice(0, 30)}…` : body}" on #${pull.ref.number}`;
+			});
+
+		button.addEventListener("click", (event) => {
+			const menu = new Menu();
+			for (const quick of QUICK_COMMENTS) {
+				menu.addItem((item) =>
+					item
+						.setTitle(`${quick.body} — ${quick.hint}`)
+						.setIcon(quick.icon)
+						.onClick(() => {
+							if (quick.confirm) {
+								new ConfirmModal(
+									this.app,
+									`Post "${quick.body}" on #${pull.ref.number}? ${quick.confirm}`,
+									"Post comment",
+									() => post(quick.body),
+								).open();
+							} else {
+								post(quick.body);
+							}
+						}),
+				);
+			}
+			menu.addSeparator();
+			menu.addItem((item) =>
+				item
+					.setTitle("Write a comment…")
+					.setIcon("lucide-pencil")
+					.onClick(() => new CommentModal(this.app, pull.ref.number, post).open()),
+			);
+			menu.showAtMouseEvent(event);
+		});
 	}
 
 	private chip(parent: HTMLElement, tone: Tone, text: string): void {
@@ -662,6 +718,48 @@ class ConfirmModal extends Modal {
 			this.close();
 			this.onConfirm();
 		});
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
+/**
+ * A dialog for a free-form comment on the pull request
+ */
+class CommentModal extends Modal {
+	constructor(
+		app: App,
+		private readonly number: number,
+		private readonly onSubmit: (body: string) => void,
+	) {
+		super(app);
+	}
+
+	onOpen(): void {
+		this.titleEl.setText(`Comment on #${this.number}`);
+		const input = this.contentEl.createEl("textarea", {
+			cls: "github-link-pr-comment-input",
+			attr: { rows: "6", placeholder: "Leave a comment" },
+		});
+		const buttons = this.contentEl.createDiv({ cls: "modal-button-container" });
+		const cancel = buttons.createEl("button", { text: "Cancel" });
+		cancel.addEventListener("click", () => this.close());
+		const post = buttons.createEl("button", { cls: "mod-cta", text: "Comment" });
+		const submit = () => {
+			if (input.value.trim()) {
+				this.close();
+				this.onSubmit(input.value);
+			}
+		};
+		post.addEventListener("click", submit);
+		input.addEventListener("keydown", (event) => {
+			if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+				submit();
+			}
+		});
+		input.focus();
 	}
 
 	onClose(): void {

@@ -981,3 +981,14 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 .github-link-pr-chip[data-tone="neutral"] {
 	color: var(--text-muted);
 }
+
+.github-link-pr-bar-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+}
+.github-link-pr-comment-input {
+	width: 100%;
+	resize: vertical;
+}

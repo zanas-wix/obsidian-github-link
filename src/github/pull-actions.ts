@@ -32,3 +32,14 @@ export function buildDraftMutation(nodeId: string, draft: boolean): string {
 		? `mutation { convertPullRequestToDraft(input: { pullRequestId: "${id}" }) { pullRequest { id } } }`
 		: `mutation { markPullRequestReadyForReview(input: { pullRequestId: "${id}" }) { pullRequest { id } } }`;
 }
+
+/**
+ * Post a comment on the pull request. The text goes through JSON.stringify, whose output is a valid
+ * GraphQL string literal, so any text is safe to embed.
+ */
+export function buildCommentMutation(nodeId: string, body: string): string {
+	if (!body.trim()) {
+		throw new Error("A comment cannot be empty.");
+	}
+	return `mutation { addComment(input: { subjectId: "${validNodeId(nodeId)}", body: ${JSON.stringify(body)} }) { commentEdge { node { id } } } }`;
+}
