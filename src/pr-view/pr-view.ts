@@ -10,12 +10,13 @@ import {
 } from "obsidian";
 import { getPullDetail, setPullAutoMerge, squashMergePullRequest } from "../github/github";
 import type { CheckState, PullDetail, ReviewState, TimelineComment, TimelineItem } from "../github/pull-detail";
-import type { PullRef } from "../github/pull-status";
+import { pullKey, type PullRef } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
 import { setPRIcon } from "../icon";
 import { relativeTime } from "../util";
 import { getMergeAction } from "./merge-action";
 import { getReadiness, type Tone } from "./readiness";
+import { setPaneSelection } from "./selection";
 
 export const PULL_VIEW_TYPE = "github-link-pull-request";
 
@@ -122,6 +123,8 @@ export class PullRequestView extends ItemView {
 
 	async setTarget(target: PullPaneTarget): Promise<void> {
 		this.target = target;
+		// Query cards follow the pane, e.g. when jumping through a stack from its navigator
+		setPaneSelection(pullKey(target.ref));
 		this.detail = null;
 		this.render();
 		await this.refresh(false);

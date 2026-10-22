@@ -12,6 +12,7 @@ import { pullKey, rowPullStatuses, STATUS_COLUMNS, type PullRef } from "../githu
 import { getSearchResultPRStatus, type MaybePaginated, type PaginationMeta } from "../github/response";
 import { openPullRequestPane, PluginSettings } from "../plugin";
 import { getProp, isEqual, relativeTime, titleCase } from "../util";
+import { getPaneSelection, onPaneSelection, setPaneSelection } from "../pr-view/selection";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
 import { expandOrQuery } from "./or-query";
 import { resolveRelativeDates } from "./relative-date";
@@ -28,7 +29,35 @@ const INITIAL_STATUS_MAX_AGE_MS = 10 * 1000;
 
 export class GithubQuery {
 	private statusMaxAgeMs = INITIAL_STATUS_MAX_AGE_MS;
+	/** Cards of this block by pull request key, so they can follow the side pane */
+	private readonly cardsByKey = new Map<string, HTMLElement>();
 	private selectedCard: HTMLElement | null = null;
+
+	/**
+	 * Mark the card of the pull request the pane shows. A card hidden in a collapsed stack gets its
+	 * stack expanded, and the card is scrolled into view.
+	 */
+	private applySelection(key: string | null): void {
+		if (!this.hostElement.isConnected) {
+			return;
+		}
+		this.selectedCard?.removeClass("is-selected");
+		this.selectedCard = null;
+		const card = key ? this.cardsByKey.get(key) : undefined;
+		if (!card) {
+			return;
+		}
+		card.addClass("is-selected");
+		this.selectedCard = card;
+
+		// Only a card hidden by a collapsed stack (every one but the first) needs the stack opened
+		const stack = card.parentElement;
+		const isFirst = card.previousElementSibling?.hasClass("github-link-cards-stack-header") ?? false;
+		if (stack?.hasClass("is-collapsed") && !isFirst) {
+			stack.querySelector<HTMLElement>(".github-link-cards-stack-header")?.click();
+		}
+		card.scrollIntoView({ block: "nearest" });
+	}
 
 	/**
 	 * Clicking a card (anywhere but a link or button) shows its pull request in the side pane and marks
@@ -40,13 +69,13 @@ export class GithubQuery {
 			return;
 		}
 		card.addClass("is-clickable");
+		this.cardsByKey.set(pullKey({ org, repo, number: row.number }), card);
 		card.addEventListener("click", (event) => {
 			if ((event.target as HTMLElement).closest("a, button, summary")) {
 				return;
 			}
-			this.selectedCard?.removeClass("is-selected");
-			this.selectedCard = card;
-			card.addClass("is-selected");
+			// The pane and every query block follow this selection, ours included
+			setPaneSelection(pullKey({ org, repo, number: row.number }));
 
 			const stack = rowStackPositions.get(row);
 			const start = stack ? rows.indexOf(row) - (stack.position - 1) : -1;
@@ -105,7 +134,9 @@ export class GithubQuery {
 		return container;
 	}
 
-	constructor(private readonly hostElement: HTMLElement) {}
+	constructor(private readonly hostElement: HTMLElement) {
+		onPaneSelection(this, (query, key) => query.applySelection(key));
+	}
 
 	public async init(source: string): Promise<void> {
 		const parsedParams = this.parseCodeblock(source);
@@ -426,6 +457,7 @@ export class GithubQuery {
 
 		const columns = this.getColumns();
 		this.statusCells.clear();
+		this.cardsByKey.clear();
 
 		if (this.params.outputType === OutputType.Cards) {
 			const wrapper = this.hostElement.createDiv({ cls: "github-link-cards-wrapper" });
@@ -439,6 +471,7 @@ export class GithubQuery {
 			this.renderHeader(table, queryType, columns);
 			this.renderBody(table, queryType, columns, this.result);
 		}
+		this.applySelection(getPaneSelection());
 		this.scheduleStatusPoll();
 	}
 
