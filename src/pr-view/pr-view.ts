@@ -191,15 +191,18 @@ export class PullRequestView extends ItemView {
 			return;
 		}
 
+		// The bar is a direct child of the scrolling element (which has no padding), so it sticks flush
+		// to the top; everything else sits in a padded body below it
 		this.renderStatusBar(el, pull);
-		this.renderHeader(el, pull);
-		this.renderReadiness(el, pull);
-		this.renderStack(el, pull);
-		this.renderReviewers(el, pull);
-		this.renderChecks(el, pull);
-		this.renderDescription(el, pull);
-		this.renderConversation(el, pull);
-		this.renderFiles(el, pull);
+		const body = el.createDiv({ cls: "github-link-pr-body" });
+		this.renderHeader(body, pull);
+		this.renderReadiness(body, pull);
+		this.renderStack(body, pull);
+		this.renderReviewers(body, pull);
+		this.renderChecks(body, pull);
+		this.renderDescription(body, pull);
+		this.renderConversation(body, pull);
+		this.renderFiles(body, pull);
 	}
 
 	private section(parent: HTMLElement, title: string, open = true, summary?: string): HTMLElement {

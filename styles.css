@@ -665,9 +665,13 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 }
 
 /* Pull request side pane */
-.github-link-pr {
-	padding: 12px;
+.view-content.github-link-pr {
+	padding: 0;
 	font-size: var(--font-ui-small);
+}
+.github-link-pr-body,
+.github-link-pr > .github-link-pr-empty {
+	padding: 12px;
 }
 .github-link-pr.is-loading {
 	opacity: 0.6;
@@ -932,7 +936,7 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
-	margin: -12px -12px 12px;
+	margin: 0;
 	padding: 8px 12px;
 	background-color: var(--background-primary);
 	border-bottom: 1px solid var(--background-modifier-border);
