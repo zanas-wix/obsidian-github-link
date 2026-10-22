@@ -503,10 +503,6 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.github-link-card-title:hover {
-	color: var(--text-accent);
-	text-decoration: underline;
-}
 
 /* The right-hand cells become tracks of the card's own subgrid */
 .github-link-card-side {

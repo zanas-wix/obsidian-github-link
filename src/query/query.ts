@@ -553,12 +553,8 @@ export class GithubQuery {
 				void statusRenderer.cell(row, card.createDiv({ cls: "github-link-card-status" }));
 			}
 
-			card.createEl("a", {
-				cls: "github-link-card-title",
-				text: row.title,
-				href: row.html_url,
-				attr: { target: "_blank" },
-			});
+			// Plain text, not a link: clicking the card opens the pane, and the number column links to GitHub
+			card.createSpan({ cls: "github-link-card-title", text: row.title });
 
 			const side = card.createDiv({ cls: "github-link-card-side" });
 			const statusCells: [string, HTMLElement][] = [];
