@@ -549,18 +549,35 @@ export class PullRequestView extends ItemView {
 		if (pull.checks.length === 0) {
 			return;
 		}
-		const failing = pull.checks.filter((check) => check.state === "failure").length;
 		const passed = pull.checks.filter((check) => check.state === "success" || check.state === "neutral").length;
-		// Only open the list when something needs attention
-		const body = this.section(parent, "Checks", failing > 0, `${passed}/${pull.checks.length} passed`);
-		for (const check of pull.checks) {
-			const row = this.tonePill(body, CHECK_TONE[check.state], "");
-			row.empty();
-			setIcon(row.createSpan({ cls: "github-link-pr-row-icon" }), TONE_ICON[CHECK_TONE[check.state]]);
-			if (check.url) {
-				row.createEl("a", { text: check.name, href: check.url, attr: { target: "_blank" } });
-			} else {
-				row.createSpan({ text: check.name });
+		const body = this.section(parent, "Checks", true, `${passed}/${pull.checks.length} passed`);
+
+		// Groups by state, worst first. What needs attention starts open; green and skipped checks start collapsed.
+		const groups: { state: CheckState; title: string; open: boolean }[] = [
+			{ state: "failure", title: "Failing", open: true },
+			{ state: "pending", title: "Running", open: true },
+			{ state: "success", title: "Passed", open: false },
+			{ state: "neutral", title: "Skipped / neutral", open: false },
+		];
+		for (const group of groups) {
+			const checks = pull.checks.filter((check) => check.state === group.state);
+			if (checks.length === 0) {
+				continue;
+			}
+			const details = body.createEl("details", { cls: "github-link-pr-checks-group" });
+			details.open = group.open;
+			const summary = details.createEl("summary");
+			summary.dataset.tone = CHECK_TONE[group.state];
+			setIcon(summary.createSpan({ cls: "github-link-pr-row-icon" }), TONE_ICON[CHECK_TONE[group.state]]);
+			summary.createSpan({ text: `${group.title} (${checks.length})` });
+			for (const check of checks) {
+				const row = details.createDiv({ cls: "github-link-pr-row" });
+				row.dataset.tone = CHECK_TONE[check.state];
+				if (check.url) {
+					row.createEl("a", { text: check.name, href: check.url, attr: { target: "_blank" } });
+				} else {
+					row.createSpan({ text: check.name });
+				}
 			}
 		}
 	}

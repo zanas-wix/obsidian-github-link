@@ -988,3 +988,25 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 	width: 100%;
 	resize: vertical;
 }
+
+/* Checks grouped by state */
+.github-link-pr-checks-group > summary {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+.github-link-pr-checks-group > summary[data-tone="danger"] .github-link-pr-row-icon {
+	color: var(--gh-color-danger-fg);
+}
+.github-link-pr-checks-group > summary[data-tone="attention"] .github-link-pr-row-icon {
+	color: var(--gh-color-attention-fg);
+}
+.github-link-pr-checks-group > summary[data-tone="success"] .github-link-pr-row-icon {
+	color: var(--gh-color-success-fg);
+}
+.github-link-pr-checks-group > .github-link-pr-row {
+	padding-inline-start: 22px;
+}
