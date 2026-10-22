@@ -6,7 +6,11 @@ export enum IssueStatus {
 	Open = "open",
 	Closed = "closed",
 	Done = "done",
+	Draft = "draft",
 }
+
+/** Issues are never drafts. */
+export type IssueOnlyStatus = Exclude<IssueStatus, IssueStatus.Draft>;
 
 export interface PaginationParams {
 	per_page?: number;
@@ -74,7 +78,7 @@ export type IssueSearchParams = RestEndpointMethodTypes["search"]["issuesAndPull
 
 export function getSearchResultIssueStatus(
 	issue: Pick<IssueSearchResponse["items"][number], "state" | "state_reason" | "pull_request" | "closed_at">,
-): IssueStatus {
+): IssueOnlyStatus {
 	if (issue.pull_request?.merged_at || issue.state_reason === "completed") {
 		return IssueStatus.Done;
 	} else if (issue.closed_at || issue.state === "closed") {
@@ -84,7 +88,14 @@ export function getSearchResultIssueStatus(
 	}
 }
 
-export function getIssueStatus(issue: IssueResponse): IssueStatus {
+export function getSearchResultPRStatus(
+	pr: Pick<IssueSearchResponse["items"][number], "state" | "state_reason" | "pull_request" | "closed_at" | "draft">,
+): IssueStatus {
+	const status = getSearchResultIssueStatus(pr);
+	return status === IssueStatus.Open && pr.draft ? IssueStatus.Draft : status;
+}
+
+export function getIssueStatus(issue: IssueResponse): IssueOnlyStatus {
 	if (issue.state === "open") {
 		return IssueStatus.Open;
 	} else if (issue.state_reason === "completed") {
@@ -99,6 +110,8 @@ export function getPRStatus(pr: PullResponse): IssueStatus {
 		return IssueStatus.Done;
 	} else if (pr.closed_at) {
 		return IssueStatus.Closed;
+	} else if (pr.draft) {
+		return IssueStatus.Draft;
 	} else {
 		return IssueStatus.Open;
 	}

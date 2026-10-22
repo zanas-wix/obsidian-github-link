@@ -218,6 +218,9 @@ body.theme-dark {
 .github-link-status-icon[data-status="done"] {
 	color: var(--gh-color-done-fg);
 }
+.github-link-status-icon[data-status="draft"] {
+	color: var(--gh-color-fg-muted);
+}
 .github-link-inline-pr-mergeable-icon[data-status="true"] {
 	color: var(--gh-color-success-fg);
 }
@@ -248,6 +251,11 @@ body.theme-dark {
 .github-link-inline-section:has(> .github-link-inline-icon[data-status="done"]) {
 	background-color: var(--gh-color-done-subtle);
 	border-color: var(--gh-color-done-emphasis);
+}
+
+.github-link-inline-section:has(> .github-link-inline-icon[data-status="draft"]) {
+	background-color: var(--gh-color-neutral-subtle);
+	border-color: var(--gh-color-neutral-emphasis);
 }
 
 .github-link-inline-section:has(> .github-link-inline-pr-mergeable-icon[data-status="true"]) {
@@ -365,6 +373,17 @@ table.github-link-table {
 	text-decoration: underline;
 }
 
+/* Rows of a PR stack: accent bar on the left, separated from neighbouring stacks */
+.github-link-table .github-link-table-stack-row > td:first-child {
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+.github-link-table .github-link-table-stack-first > td {
+	border-top: 2px solid var(--background-modifier-border);
+}
+.github-link-table .github-link-table-stack-last > td {
+	border-bottom: 2px solid var(--background-modifier-border);
+}
+
 .github-link-table-avatar {
 	width: max(24px, var(--icon-l));
 	height: max(24px, var(--icon-l));
@@ -402,4 +421,234 @@ body.theme-light .github-link-table .github-link-table-labels .github-link-table
 body.theme-dark .github-link-table .github-link-table-labels .github-link-table-label {
 	background-color: color-mix(in srgb, var(--status-color) 20%, transparent);
 	color: var(--status-color);
+}
+
+/*
+ * Cards output: compact full-width rounded rows on one shared grid. Every group, stack and card is a
+ * subgrid of .github-link-cards-root, so the columns line up across all cards.
+ * Tracks: status icon, title (takes the rest), one per right-hand cell.
+ */
+.github-link-cards-root {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) repeat(var(--side-cells, 0), auto);
+	column-gap: 12px;
+}
+
+.github-link-cards-group,
+.github-link-cards,
+.github-link-cards-stack,
+.github-link-card {
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: subgrid;
+}
+
+.github-link-cards {
+	row-gap: 8px;
+}
+
+.github-link-card {
+	align-items: center;
+	padding: 8px 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-primary);
+}
+
+/* A stack is one rounded block of joined cards with an accent bar; cards are indented by depth */
+.github-link-cards-stack {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
+	overflow: hidden;
+}
+.github-link-cards-stack > .github-link-card {
+	position: relative;
+	border: 0;
+	border-radius: 0;
+	padding-inline-start: calc(12px + var(--stack-depth, 0) * 20px);
+}
+/* Tree guide: an elbow from the card above (its parent) into this card */
+.github-link-cards-stack > .github-link-card-nested::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	height: 50%;
+	left: calc(12px + (var(--stack-depth, 1) - 1) * 20px + 6px);
+	width: 10px;
+	border-left: 1px solid var(--text-faint);
+	border-bottom: 1px solid var(--text-faint);
+	border-bottom-left-radius: 4px;
+	pointer-events: none;
+}
+.github-link-cards-stack > .github-link-card + .github-link-card {
+	border-top: 1px solid var(--background-modifier-border);
+}
+.github-link-cards-stack > .github-link-cards-stack-header,
+.github-link-cards-group > .github-link-cards-group-heading {
+	grid-column: 1 / -1;
+}
+
+/* Status: icon only */
+.github-link-card-status .github-link-table-status > span:not(.github-link-status-icon) {
+	display: none;
+}
+
+.github-link-card-title {
+	font-size: var(--font-ui-small);
+	min-width: 0;
+	color: var(--text-normal);
+	text-decoration: none;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.github-link-card-title:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+/* The right-hand cells become tracks of the card's own subgrid */
+.github-link-card-side {
+	display: contents;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+.github-link-card-side > * {
+	white-space: nowrap;
+}
+
+.github-link-card-labels {
+	display: flex;
+	gap: 4px;
+}
+.github-link-card-labels .github-link-table-labels {
+	justify-content: flex-end;
+}
+.github-link-card-labels .github-link-table-label {
+	border: 1px solid var(--status-color);
+	background-color: color-mix(in srgb, var(--status-color) 20%, transparent);
+}
+
+.github-link-card-stack-position {
+	padding: 0 8px;
+	border-radius: 2em;
+	background-color: var(--background-modifier-hover);
+}
+
+/* Cards grouped by repo */
+.github-link-cards-group + .github-link-cards-group {
+	margin-top: 12px;
+}
+.github-link-cards-group-heading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 4px;
+	font-weight: var(--font-semibold);
+}
+.github-link-cards-group-count {
+	padding: 0 8px;
+	border-radius: 2em;
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-normal);
+	color: var(--text-muted);
+	background-color: var(--background-modifier-hover);
+}
+
+.github-link-query-status {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+.github-link-query-error {
+	color: var(--text-error);
+}
+
+/* Review / CI / merge pills */
+.github-link-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+}
+.github-link-pill-icon {
+	display: inline-flex;
+}
+.github-link-pill-icon svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+.github-link-pill[data-tone="success"] {
+	color: var(--gh-color-success-fg);
+}
+.github-link-pill[data-tone="danger"] {
+	color: var(--gh-color-danger-fg);
+}
+.github-link-pill[data-tone="attention"] {
+	color: var(--gh-color-attention-fg);
+}
+
+/* Collapsible stack header */
+.github-link-cards-stack-header {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 12px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	background-color: var(--background-secondary);
+	cursor: pointer;
+	user-select: none;
+}
+.github-link-cards-stack-header:hover {
+	color: var(--text-normal);
+}
+.github-link-cards-stack-chevron {
+	display: inline-flex;
+}
+.github-link-cards-stack-chevron svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+/* A collapsed stack keeps only its first card */
+.github-link-cards-stack.is-collapsed > .github-link-card ~ .github-link-card {
+	display: none;
+}
+.github-link-cards-stack-hint {
+	margin-inline-start: auto;
+	padding: 0 8px;
+	border-radius: 2em;
+	background-color: var(--background-modifier-hover);
+}
+
+/* Per-card status refresh */
+.github-link-card-refresh {
+	opacity: 0.4;
+}
+.github-link-card:hover .github-link-card-refresh {
+	opacity: 1;
+}
+.github-link-card-refresh svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+.github-link-card-refresh.is-loading svg {
+	animation: github-link-spin 1s linear infinite;
+}
+@keyframes github-link-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* Status cells are empty until the lazily loaded statuses arrive */
+.is-loading-status .github-link-status-cell:empty::after {
+	content: "\2026";
+	color: var(--text-faint);
+}
+
+/* Cards that are not part of a stack keep an empty cell so the columns still line up */
+.github-link-card-stack-position:empty {
+	padding: 0;
+	background: none;
 }

@@ -4,6 +4,7 @@ export type TableResult = IssueSearchResponse["items"] | IssueListResponse | Pul
 
 export enum OutputType {
 	Table = "table",
+	Cards = "cards",
 }
 
 export enum QueryType {
@@ -99,4 +100,21 @@ export interface QueryParams {
 	 * Pull request target
 	 */
 	base?: string;
+
+	/**
+	 * Pull requests only: group PRs that are stacked on each other (a PR targeting another PR's
+	 * branch) together, bottom of the stack first. Adds a "stack" column by default.
+	 */
+	stack?: boolean;
+
+	/**
+	 * Cards output only: group cards under a heading per repository.
+	 */
+	groupBy?: "repo";
+
+	/**
+	 * Pull requests with review/ci/merge columns: re-check their status every this many seconds
+	 * (minimum 30). Off when not set.
+	 */
+	statusRefresh?: number;
 }

@@ -45,6 +45,15 @@ describe("GithubLinkPlugin", () => {
 		expect(plugin.registerInterval).toHaveBeenCalled();
 	});
 
+	test("should save updated cache on unload", async () => {
+		plugin = new GithubLinkPlugin(app, manifest);
+		await plugin.onload();
+		getCache().set({ url: "mock" }, { json: "mock", headers: {}, status: 200 } as RequestUrlResponse);
+		await plugin.onunload();
+		expect(mockedPlugin(plugin).data.cache).toHaveLength(1);
+		expect(getCache().cacheUpdated).toBe(false);
+	});
+
 	describe("loadData", () => {
 		test("should initialize default settings", async () => {
 			plugin = new GithubLinkPlugin(app, manifest);
@@ -76,6 +85,7 @@ describe("GithubLinkPlugin", () => {
 			{ stored: { tagTooltips: !DEFAULT_SETTINGS.tagTooltips }, name: "tagTooltips" },
 			{ stored: { minRequestSeconds: 69 }, name: "minRequestSeconds" },
 			{ stored: { logLevel: LogLevel.Debug }, name: "logLevel" },
+			{ stored: { tagEnableUrlPreview: !DEFAULT_SETTINGS.tagEnableUrlPreview }, name: "tagEnableUrlPreview" },
 			{ stored: { showPagination: !DEFAULT_SETTINGS.showPagination }, name: "showPagination" },
 			{ stored: { showRefresh: !DEFAULT_SETTINGS.showRefresh }, name: "showRefresh" },
 			{ stored: { showExternalLink: !DEFAULT_SETTINGS.showExternalLink }, name: "showExternalLink" },

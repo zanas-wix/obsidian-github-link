@@ -35,6 +35,14 @@ This produces a table of results that refreshes upon opening the note.
 
 ![ExampleTable](doc/ExampleQueryResult.png)
 
+For `pull-request` queries, add `stack: true` to group PRs that are stacked on each other (a PR whose base branch is another PR's head branch). Each stack is listed together, bottom PR first, and a `stack` column shows the position (e.g. `2/3`). Stacks are detected within the current page of results only, and search queries fetch each PR to read its branches.
+
+Use `outputType: cards` instead of `table` for a card layout. Each card shows the title as a link, with status, number, repo and stack position in its header and the remaining `columns` (author, created, labels, ...) below. With `stack: true`, a stack's cards sit together in one container, indented by position.
+
+Queries may use `OR`, with parentheses to group: `query: "is:pr is:open (author:me OR assignee:me)"`. GitHub's search can't do this across qualifiers, so the plugin splits the query into plain searches, runs each (all pages), and merges the results without duplicates. `AND` binds tighter than `OR`, as on GitHub, so without parentheses `is:pr author:me OR assignee:me` means `(is:pr author:me) OR assignee:me`. Merged results are not paginated.
+
+For `pull-request` queries, the columns `review` (approved / changes requested / review required), `ci` (checks passed/total, coloured by the overall result) and `merge` (mergeable / conflicts) show whether a PR is ready to merge. Add them to `columns`, e.g. `columns: [number, title, review, ci, merge]`. They are loaded in batches with a single GraphQL request per 25 PRs, which needs a token (an account token or the gh CLI). In cards they appear on the right of each card. Add `statusRefresh: 60` to re-check them every 60 seconds (minimum 30): one batched request per 25 open PRs, paused while the window is hidden, and backing off after failures. Each card also has a refresh icon for a single PR.
+
 See the [documentation](https://github.com/nathonius/obsidian-github-link/wiki) for more info.
 
 ## Updates

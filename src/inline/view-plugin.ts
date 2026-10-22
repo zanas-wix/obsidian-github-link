@@ -3,6 +3,7 @@ import type { DecorationSet, PluginValue, EditorView, ViewUpdate } from "@codemi
 import { Decoration, MatchDecorator, ViewPlugin, WidgetType } from "@codemirror/view";
 
 import type { GithubLinkPlugin } from "../plugin";
+import { PluginSettings } from "../plugin";
 import { isAllowedPath } from "../github/urls";
 import { createTag } from "./inline";
 
@@ -82,6 +83,11 @@ export function createInlineViewPlugin(_plugin: GithubLinkPlugin) {
 		 */
 		shouldRender(decorationFrom: number, decorationTo: number, match: RegExpMatchArray): boolean {
 			const view = this.view;
+
+			// Bail if URL previews are disabled
+			if (!PluginSettings.tagEnableUrlPreview) {
+				return false;
+			}
 
 			// Bail if it's not live preview mode
 			if (!this.isLivePreview()) {

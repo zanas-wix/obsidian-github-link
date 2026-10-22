@@ -25,10 +25,16 @@ export interface GithubLinkPluginSettings {
 	showRefresh: boolean;
 	showExternalLink: boolean;
 	logLevel: LogLevel;
+	tagEnableUrlPreview: boolean;
 	tagTooltips: boolean;
 	tagShowPRMergeable: boolean;
 	tagShowFileBranchName: boolean;
 	tagShowFileLineNumber: boolean;
+	tagShowStatusIcon: boolean;
+	tagShowOrg: boolean;
+	tagShowRepo: boolean;
+	tagShowNumber: boolean;
+	tagShowTitle: boolean;
 	cacheIntervalSeconds: number;
 	maxCacheAgeHours: number;
 	minRequestSeconds: number;
@@ -45,10 +51,16 @@ export const DEFAULT_SETTINGS: GithubLinkPluginSettings = {
 	showRefresh: true,
 	showExternalLink: true,
 	logLevel: LogLevel.Error,
+	tagEnableUrlPreview: true,
 	tagTooltips: false,
 	tagShowPRMergeable: false,
 	tagShowFileBranchName: true,
 	tagShowFileLineNumber: true,
+	tagShowStatusIcon: true,
+	tagShowOrg: true,
+	tagShowRepo: true,
+	tagShowNumber: true,
+	tagShowTitle: true,
 	cacheIntervalSeconds: 60,
 	maxCacheAgeHours: 120,
 	minRequestSeconds: 60,

@@ -182,6 +182,19 @@ export class GithubLinkPluginSettingsTab extends PluginSettingTab {
 				});
 			});
 
+		containerEl.createEl("h2", { text: "URL preview display" });
+
+		new Setting(containerEl)
+			.setName("Enable URL previews")
+			.setDesc("Replace GitHub URLs in Live Preview with compact inline tags.")
+			.addToggle((toggle) => {
+				toggle.setValue(PluginSettings.tagEnableUrlPreview);
+				toggle.onChange((value) => {
+					PluginSettings.tagEnableUrlPreview = value;
+					void this.saveSettings();
+				});
+			});
+
 		new Setting(containerEl)
 			.setName("Max inline tag characters")
 			.setDesc("Maximum total characters for inline issue/PR tags. Set to 0 to disable truncation.")
@@ -221,6 +234,61 @@ export class GithubLinkPluginSettingsTab extends PluginSettingTab {
 				toggle.setValue(PluginSettings.stripConventionalCommitPrefix);
 				toggle.onChange((value) => {
 					PluginSettings.stripConventionalCommitPrefix = value;
+					void this.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Show status icon")
+			.setDesc("Show the status icon (e.g. open/closed/merged) on inline tags")
+			.addToggle((toggle) => {
+				toggle.setValue(PluginSettings.tagShowStatusIcon);
+				toggle.onChange((value) => {
+					PluginSettings.tagShowStatusIcon = value;
+					void this.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Show organization")
+			.setDesc("Show the organization/owner name on inline tags (only shown when no issue/PR/file is present)")
+			.addToggle((toggle) => {
+				toggle.setValue(PluginSettings.tagShowOrg);
+				toggle.onChange((value) => {
+					PluginSettings.tagShowOrg = value;
+					void this.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Show repository")
+			.setDesc("Show the repository name on inline tags")
+			.addToggle((toggle) => {
+				toggle.setValue(PluginSettings.tagShowRepo);
+				toggle.onChange((value) => {
+					PluginSettings.tagShowRepo = value;
+					void this.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Show issue/PR number")
+			.setDesc("Show the #number on inline issue and pull request tags")
+			.addToggle((toggle) => {
+				toggle.setValue(PluginSettings.tagShowNumber);
+				toggle.onChange((value) => {
+					PluginSettings.tagShowNumber = value;
+					void this.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Show issue/PR title")
+			.setDesc("Show the title on inline issue and pull request tags")
+			.addToggle((toggle) => {
+				toggle.setValue(PluginSettings.tagShowTitle);
+				toggle.onChange((value) => {
+					PluginSettings.tagShowTitle = value;
 					void this.saveSettings();
 				});
 			});

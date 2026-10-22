@@ -67,12 +67,14 @@ function createTagSection(...children: HTMLElement[]): HTMLDivElement {
 }
 
 function createIconSection(config: TagConfig) {
+	if (!PluginSettings.tagShowStatusIcon) return;
 	// Set default icon
 	config.sections.push(config.icon);
 	setIcon(config.icon, "github");
 }
 
 function createOrgSection(config: TagConfig, parsedUrl: ParsedUrl) {
+	if (!PluginSettings.tagShowOrg) return;
 	// Add org
 	if (parsedUrl.org) {
 		config.sections.push(
@@ -85,6 +87,7 @@ function createOrgSection(config: TagConfig, parsedUrl: ParsedUrl) {
 }
 
 function createRepoSection(config: TagConfig, parsedUrl: ParsedUrl) {
+	if (!PluginSettings.tagShowRepo) return;
 	// Add repo
 	if (parsedUrl.repo) {
 		config.sections.push(
@@ -104,19 +107,22 @@ function createIssueSection(config: TagConfig, parsedUrl: ParsedUrl, container: 
 	const issueContainer = createSpan({
 		cls: "github-link-inline-issue-title-section",
 	});
-	const numberSpan = issueContainer.createSpan({ text: `#${parsedUrl.issue}`, cls: "github-link-inline-issue-number" });
+	const numberSpan = issueContainer.createSpan({
+		text: PluginSettings.tagShowNumber ? `#${parsedUrl.issue}` : "",
+		cls: "github-link-inline-issue-number",
+	});
 	config.sections.push(issueContainer);
 	if (parsedUrl.org && parsedUrl.repo) {
 		getIssue(parsedUrl.org, parsedUrl.repo, parsedUrl.issue)
 			.then((issue) => {
-				if (issue.title) {
+				const status = getIssueStatus(issue);
+				setIssueIcon(config.icon, status);
+				if (issue.title && PluginSettings.tagShowTitle) {
 					const displayTitle = stripConventionalPrefix(issue.title);
 					const title = createSpan({ cls: "github-link-inline-issue-title", text: displayTitle });
 					title.ariaLabel = issue.title;
 					// Number first, then title
 					numberSpan.after(title);
-					const status = getIssueStatus(issue);
-					setIssueIcon(config.icon, status);
 				}
 			})
 			.catch((err) => {
@@ -133,14 +139,17 @@ function createPullRequestSection(config: TagConfig, parsedUrl: ParsedUrl, conta
 	const prContainer = createSpan({
 		cls: "github-link-inline-pr-title-section",
 	});
-	const numberSpan = prContainer.createSpan({ text: `#${parsedUrl.pr}`, cls: "github-link-inline-pr-number" });
+	const numberSpan = prContainer.createSpan({
+		text: PluginSettings.tagShowNumber ? `#${parsedUrl.pr}` : "",
+		cls: "github-link-inline-pr-number",
+	});
 	config.sections.push(prContainer);
 	if (parsedUrl.org && parsedUrl.repo) {
 		getPullRequest(parsedUrl.org, parsedUrl.repo, parsedUrl.pr)
 			.then((pr) => {
-				if (pr.title) {
-					const status = getPRStatus(pr);
-					setPRIcon(config.icon, status);
+				const status = getPRStatus(pr);
+				setPRIcon(config.icon, status);
+				if (pr.title && PluginSettings.tagShowTitle) {
 					const displayTitle = stripConventionalPrefix(pr.title);
 					const title = createSpan({ cls: "github-link-inline-pr-title", text: displayTitle });
 					title.ariaLabel = pr.title;

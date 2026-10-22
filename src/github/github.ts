@@ -5,6 +5,7 @@ import { PluginSettings } from "../plugin";
 import { getGhTokenSync } from "./gh-token";
 import { issueListSortFromQuery, pullListSortFromQuery, searchSortFromQuery } from "../query/sort";
 import type { QueryParams } from "../query/types";
+import { buildPullStatusQuery, parsePullStatuses, pullKey, type PullRef, type PullStatus } from "./pull-status";
 import { GitHubApi } from "./api";
 import type {
 	CheckRunListResponse,
@@ -25,6 +26,50 @@ import type {
 
 const tokenMatchRegex = /repo:(.+)\//;
 const api = new GitHubApi();
+
+const PULL_STATUS_BATCH_SIZE = 25;
+
+/** Latest status per pull request, shared by every query block so the same PR is never fetched twice at once */
+const pullStatusCache = new Map<string, { status: PullStatus; fetchedAt: number }>();
+
+/**
+ * Review, merge and CI state for pull requests, batched into as few GraphQL requests as possible
+ * (25 PRs per request). Statuses fetched less than `maxAgeMs` ago are reused instead of requested again.
+ * Pull requests GitHub does not return (no access, deleted) are missing from the result.
+ */
+export async function getPullStatuses(refs: PullRef[], maxAgeMs = 0): Promise<Map<string, PullStatus>> {
+	const result = new Map<string, PullStatus>();
+	const stale = new Map<string, PullRef>();
+	const now = Date.now();
+	for (const ref of refs) {
+		const key = pullKey(ref);
+		const cached = pullStatusCache.get(key);
+		if (cached && now - cached.fetchedAt < maxAgeMs) {
+			result.set(key, cached.status);
+		} else {
+			stale.set(key, ref);
+		}
+	}
+
+	const byOrg = new Map<string, PullRef[]>();
+	for (const ref of stale.values()) {
+		byOrg.set(ref.org, [...(byOrg.get(ref.org) ?? []), ref]);
+	}
+	for (const [org, orgRefs] of byOrg) {
+		for (let i = 0; i < orgRefs.length; i += PULL_STATUS_BATCH_SIZE) {
+			const batch = orgRefs.slice(i, i + PULL_STATUS_BATCH_SIZE);
+			const data = await api.graphql<Parameters<typeof parsePullStatuses>[1]>(
+				buildPullStatusQuery(batch),
+				getToken(org),
+			);
+			for (const [key, status] of parsePullStatuses(batch, data)) {
+				pullStatusCache.set(key, { status, fetchedAt: Date.now() });
+				result.set(key, status);
+			}
+		}
+	}
+	return result;
+}
 
 function getAccount(org?: string): GithubAccount | undefined {
 	const account =

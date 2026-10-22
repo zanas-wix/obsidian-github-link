@@ -188,6 +188,39 @@ export class GitHubApi {
 		return { meta, response: response.json as IssueSearchResponse };
 	}
 
+	/**
+	 * Run a GraphQL query. Not cached: the request cache is keyed by URL, which is the same for every query.
+	 */
+	public graphql<T>(query: string, token?: string): Promise<T> {
+		const { resolve, reject, promise } = promiseWithResolvers<T>();
+		GitHubApi.q.push(async () => {
+			try {
+				let _token = token;
+				if (!_token && PluginSettings.useGhCli) {
+					_token = (await getGhTokenPending()) ?? getGhTokenSync() ?? undefined;
+				}
+				if (!_token) {
+					throw new Error("GitHub GraphQL requires authentication; add an account token or enable the gh CLI.");
+				}
+				const response = await requestUrl({
+					url: `${GitHubApi.baseApi}/graphql`,
+					method: "POST",
+					headers: { Authorization: `Bearer ${_token}`, "Content-Type": "application/json" },
+					body: JSON.stringify({ query }),
+				});
+				const json = response.json as { data?: T; errors?: { message: string }[] };
+				// Partial data is fine (e.g. one PR in a repo we cannot see); no data at all is a failure
+				if (!json.data) {
+					throw new Error(json.errors?.map((e) => e.message).join("; ") ?? "Empty GraphQL response");
+				}
+				resolve(json.data);
+			} catch (err) {
+				reject(err);
+			}
+		});
+		return promise;
+	}
+
 	public async listCheckRunsForRef(
 		org: string,
 		repo: string,

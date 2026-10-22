@@ -8,11 +8,11 @@ import type { TableResult } from "../types";
 
 export interface ColumnGetter<T> {
 	header: string;
-	cell: (row: T, el: HTMLTableCellElement) => void | Promise<void>;
+	cell: (row: T, el: HTMLElement) => void | Promise<void>;
 }
 export type ColumnsMap = Record<string, ColumnGetter<TableResult[number]>>;
 
-export function DateCell(value: string | undefined | null, el: HTMLTableCellElement) {
+export function DateCell(value: string | undefined | null, el: HTMLElement) {
 	el.classList.add("github-link-table-date");
 	if (!value) {
 		return;

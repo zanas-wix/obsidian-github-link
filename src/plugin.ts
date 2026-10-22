@@ -22,6 +22,16 @@ export function getCache(): RequestCache {
 
 export class GithubLinkPlugin extends Plugin {
 	public cacheInterval: number | undefined;
+
+	private async saveCacheIfUpdated(): Promise<void> {
+		if (cache.cacheUpdated) {
+			PluginData.cache = cache.toJSON();
+			await this.saveData(PluginData);
+			cache.cacheUpdated = false;
+			logger.info(`Saved request cache with ${PluginData.cache?.length} items.`);
+		}
+	}
+
 	async onload() {
 		const data = (await this.loadData()) || {};
 
@@ -66,18 +76,17 @@ export class GithubLinkPlugin extends Plugin {
 		}
 	}
 
+	async onunload() {
+		await this.saveCacheIfUpdated();
+	}
+
 	/**
 	 * Save cache at regular interval
 	 */
 	public setCacheInterval(): void {
 		const checkCache = async () => {
 			logger.debug("Checking if cache needs a save.");
-			if (cache.cacheUpdated) {
-				PluginData.cache = cache.toJSON();
-				await this.saveData(PluginData);
-				cache.cacheUpdated = false;
-				logger.info(`Saved request cache with ${PluginData.cache?.length} items.`);
-			}
+			await this.saveCacheIfUpdated();
 		};
 
 		window.clearInterval(this.cacheInterval);

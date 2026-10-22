@@ -194,3 +194,29 @@ export class RequestError implements Error {
 		this.status = (originalError as any).status;
 	}
 }
+
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+	["year", 365 * 24 * 3600],
+	["month", 30 * 24 * 3600],
+	["day", 24 * 3600],
+	["hour", 3600],
+	["minute", 60],
+];
+const relativeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+/**
+ * "12 minutes ago", "yesterday", ... for an ISO date string; falls back to the raw value if unparseable.
+ */
+export function relativeTime(value: string, now: number = Date.now()): string {
+	const then = new Date(value).valueOf();
+	if (isNaN(then)) {
+		return value;
+	}
+	const seconds = Math.round((then - now) / 1000);
+	for (const [unit, size] of RELATIVE_UNITS) {
+		if (Math.abs(seconds) >= size) {
+			return relativeFormat.format(Math.round(seconds / size), unit);
+		}
+	}
+	return relativeFormat.format(seconds, "second");
+}
