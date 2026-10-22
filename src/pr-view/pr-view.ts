@@ -1,10 +1,20 @@
-import { ItemView, MarkdownRenderer, Notice, setIcon, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
-import { getPullDetail } from "../github/github";
+import {
+	ItemView,
+	MarkdownRenderer,
+	Modal,
+	Notice,
+	setIcon,
+	type App,
+	type ViewStateResult,
+	type WorkspaceLeaf,
+} from "obsidian";
+import { getPullDetail, setPullAutoMerge, squashMergePullRequest } from "../github/github";
 import type { CheckState, PullDetail, ReviewState, TimelineComment, TimelineItem } from "../github/pull-detail";
 import type { PullRef } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
 import { setPRIcon } from "../icon";
 import { relativeTime } from "../util";
+import { getMergeAction } from "./merge-action";
 import { getReadiness, type Tone } from "./readiness";
 
 export const PULL_VIEW_TYPE = "github-link-pull-request";
@@ -178,6 +188,7 @@ export class PullRequestView extends ItemView {
 			return;
 		}
 
+		this.renderStatusBar(el, pull);
 		this.renderHeader(el, pull);
 		this.renderReadiness(el, pull);
 		this.renderStack(el, pull);
@@ -284,10 +295,120 @@ export class PullRequestView extends ItemView {
 		const readiness = getReadiness(pull);
 		const summary =
 			pull.state !== "open" ? "" : readiness.blockers === 0 ? "ready to merge" : `${readiness.blockers} to resolve`;
-		const body = this.section(parent, "Merge readiness", true, summary);
+		// The sticky bar carries the verdict; the full checklist is one click away
+		const body = this.section(parent, "Merge readiness", false, summary);
 		for (const item of readiness.items) {
 			this.tonePill(body, item.tone, item.label);
 		}
+	}
+
+	/**
+	 * Sticky bar: the verdict at a glance (checks, review, conflicts) and the one action that fits.
+	 */
+	private renderStatusBar(parent: HTMLElement, pull: PullDetail): void {
+		const bar = parent.createDiv({ cls: "github-link-pr-bar" });
+		const chips = bar.createDiv({ cls: "github-link-pr-bar-chips" });
+
+		if (pull.state !== "open") {
+			this.chip(chips, "neutral", pull.state === "merged" ? "Merged" : "Closed");
+			return;
+		}
+		if (pull.draft) {
+			this.chip(chips, "danger", "Draft");
+		}
+		if (pull.review) {
+			const [tone, label] = {
+				approved: ["success", "Approved"],
+				"changes-requested": ["danger", "Changes requested"],
+				"review-required": ["attention", "Review required"],
+			}[pull.review] as [Tone, string];
+			this.chip(chips, tone, label);
+		}
+		if (pull.checks.length > 0) {
+			const failing = pull.checks.some((check) => check.state === "failure");
+			const running = pull.checks.some((check) => check.state === "pending");
+			const passed = pull.checks.filter((check) => check.state === "success" || check.state === "neutral").length;
+			this.chip(chips, failing ? "danger" : running ? "attention" : "success", `CI ${passed}/${pull.checks.length}`);
+		}
+		if (pull.mergeable === "conflicting") {
+			this.chip(chips, "danger", "Conflicts");
+		}
+		if (pull.autoMerge) {
+			this.chip(chips, "success", "Auto-merge on");
+		}
+
+		this.renderMergeAction(bar, pull);
+	}
+
+	private chip(parent: HTMLElement, tone: Tone, text: string): void {
+		const chip = parent.createSpan({ cls: "github-link-pr-chip" });
+		chip.dataset.tone = tone;
+		setIcon(chip.createSpan({ cls: "github-link-pr-row-icon" }), TONE_ICON[tone]);
+		chip.createSpan({ text });
+	}
+
+	private renderMergeAction(parent: HTMLElement, pull: PullDetail): void {
+		const action = getMergeAction(pull);
+		if (action.kind === "none") {
+			return;
+		}
+		const label = {
+			merge: "Squash & merge",
+			"enable-auto-merge": "Enable auto-merge",
+			"disable-auto-merge": "Disable auto-merge",
+		}[action.kind];
+		const icon = {
+			merge: "lucide-git-merge",
+			"enable-auto-merge": "lucide-zap",
+			"disable-auto-merge": "lucide-zap-off",
+		}[action.kind];
+
+		const button = parent.createEl("button", {
+			cls: action.kind === "merge" ? "mod-cta" : "",
+			attr: { "aria-label": label },
+		});
+		setIcon(button.createSpan(), icon);
+		button.createSpan({ text: label });
+
+		const run = async () => {
+			button.disabled = true;
+			button.addClass("is-loading");
+			try {
+				if (action.kind === "merge") {
+					await squashMergePullRequest(pull.ref, pull.nodeId);
+					new Notice(`Squash-merged #${pull.ref.number}`);
+				} else {
+					await setPullAutoMerge(pull.ref, pull.nodeId, action.kind === "enable-auto-merge");
+					new Notice(
+						`Auto-merge ${action.kind === "enable-auto-merge" ? "enabled" : "disabled"} for #${pull.ref.number}`,
+					);
+				}
+				await this.refresh(false);
+			} catch (error) {
+				const message =
+					error instanceof Error
+						? error.message
+						: typeof error === "object" && error && "message" in error
+							? String(error.message)
+							: "unknown error";
+				new Notice(`GitHub Link: ${label} failed: ${message}`, 8000);
+				button.disabled = false;
+				button.removeClass("is-loading");
+			}
+		};
+		button.addEventListener("click", () => {
+			if (action.kind === "merge") {
+				// Merging cannot be undone, unlike auto-merge
+				new ConfirmModal(
+					this.app,
+					`Squash and merge #${pull.ref.number} "${pull.title}" into ${pull.baseRef}?`,
+					"Squash & merge",
+					() => void run(),
+				).open();
+			} else {
+				void run();
+			}
+		});
 	}
 
 	private renderStack(parent: HTMLElement, pull: PullDetail): void {
@@ -480,5 +601,35 @@ export class PullRequestView extends ItemView {
 		if (pull.changedFiles > pull.files.length) {
 			body.createDiv({ cls: "github-link-pr-empty", text: `…and ${pull.changedFiles - pull.files.length} more files` });
 		}
+	}
+}
+
+/**
+ * A small confirmation dialog, used before the one action that cannot be undone
+ */
+class ConfirmModal extends Modal {
+	constructor(
+		app: App,
+		private readonly message: string,
+		private readonly confirmLabel: string,
+		private readonly onConfirm: () => void,
+	) {
+		super(app);
+	}
+
+	onOpen(): void {
+		this.contentEl.createEl("p", { text: this.message });
+		const buttons = this.contentEl.createDiv({ cls: "modal-button-container" });
+		const cancel = buttons.createEl("button", { text: "Cancel" });
+		cancel.addEventListener("click", () => this.close());
+		const confirm = buttons.createEl("button", { cls: "mod-cta", text: this.confirmLabel });
+		confirm.addEventListener("click", () => {
+			this.close();
+			this.onConfirm();
+		});
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
 	}
 }

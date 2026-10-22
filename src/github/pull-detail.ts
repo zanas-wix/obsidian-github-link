@@ -65,6 +65,13 @@ export interface PullDetail {
 	unresolvedThreads: number;
 	files: { path: string; additions: number; deletions: number }[];
 	changedFiles: number;
+	/** GraphQL node id, needed to merge or toggle auto-merge */
+	nodeId: string;
+	/** Set while auto-merge is enabled */
+	autoMerge: { method: string; enabledBy: string | null } | null;
+	canEnableAutoMerge: boolean;
+	canDisableAutoMerge: boolean;
+	squashAllowed: boolean;
 }
 
 /** Newest comments and reviews are what matter in a long PR, so those lists take `last`, not `first` */
@@ -73,11 +80,14 @@ export function buildPullDetailQuery(ref: PullRef): string {
 	const author = "author { login avatarUrl }";
 	return `query {
 	repository(owner: "${ref.org}", name: "${ref.repo}") {
+		autoMergeAllowed squashMergeAllowed
 		pullRequest(number: ${ref.number}) {
 			title url body state isDraft merged createdAt updatedAt
 			${author}
 			baseRefName headRefName additions deletions changedFiles
 			reviewDecision mergeable mergeStateStatus
+			id viewerCanEnableAutoMerge viewerCanDisableAutoMerge
+			autoMergeRequest { mergeMethod enabledBy { login } }
 			labels(first: 20) { nodes { name color } }
 			reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
 			latestReviews(first: 30) { nodes { ${author} state submittedAt } }
@@ -126,6 +136,10 @@ interface RawPull {
 	additions: number;
 	deletions: number;
 	changedFiles: number;
+	id: string;
+	autoMergeRequest?: { mergeMethod: string; enabledBy?: { login?: string } | null } | null;
+	viewerCanEnableAutoMerge?: boolean;
+	viewerCanDisableAutoMerge?: boolean;
 	reviewDecision?: string | null;
 	mergeable?: string;
 	mergeStateStatus?: string;
@@ -166,7 +180,9 @@ interface RawPull {
 	};
 }
 
-export type PullDetailResponse = { repository?: { pullRequest?: RawPull | null } | null };
+export type PullDetailResponse = {
+	repository?: { autoMergeAllowed?: boolean; squashMergeAllowed?: boolean; pullRequest?: RawPull | null } | null;
+};
 
 /**
  * Null when GitHub returned no such pull request (deleted, or no access)
@@ -256,6 +272,13 @@ export function parsePullDetail(ref: PullRef, data: PullDetailResponse): PullDet
 		unresolvedThreads: threads.filter((thread) => !thread.isResolved).length,
 		files: pull.files?.nodes ?? [],
 		changedFiles: pull.changedFiles,
+		nodeId: pull.id,
+		autoMerge: pull.autoMergeRequest
+			? { method: pull.autoMergeRequest.mergeMethod, enabledBy: pull.autoMergeRequest.enabledBy?.login ?? null }
+			: null,
+		canEnableAutoMerge: Boolean(pull.viewerCanEnableAutoMerge) && Boolean(data.repository?.autoMergeAllowed),
+		canDisableAutoMerge: Boolean(pull.viewerCanDisableAutoMerge),
+		squashAllowed: Boolean(data.repository?.squashMergeAllowed),
 	};
 }
 

@@ -6,6 +6,7 @@ import { getGhTokenSync } from "./gh-token";
 import { issueListSortFromQuery, pullListSortFromQuery, searchSortFromQuery } from "../query/sort";
 import type { QueryParams } from "../query/types";
 import { buildPullDetailQuery, parsePullDetail, type PullDetail, type PullDetailResponse } from "./pull-detail";
+import { buildAutoMergeMutation, buildMergeMutation } from "./pull-actions";
 import { buildPullStatusQuery, parsePullStatuses, pullKey, type PullRef, type PullStatus } from "./pull-status";
 import { GitHubApi } from "./api";
 import type {
@@ -38,6 +39,19 @@ export async function getPullDetail(ref: PullRef): Promise<PullDetail> {
 		throw new Error(`Pull request ${pullKey(ref)} was not found, or you have no access to it.`);
 	}
 	return detail;
+}
+
+/**
+ * Squash and merge. The cached review/CI status of the PR is dropped, so lists show its new state.
+ */
+export async function squashMergePullRequest(ref: PullRef, nodeId: string): Promise<void> {
+	await api.graphql(buildMergeMutation(nodeId), getToken(ref.org));
+	pullStatusCache.delete(pullKey(ref));
+}
+
+export async function setPullAutoMerge(ref: PullRef, nodeId: string, enable: boolean): Promise<void> {
+	await api.graphql(buildAutoMergeMutation(nodeId, enable), getToken(ref.org));
+	pullStatusCache.delete(pullKey(ref));
 }
 
 const PULL_STATUS_BATCH_SIZE = 25;

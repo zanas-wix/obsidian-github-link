@@ -7,6 +7,7 @@ const author = { login: "zanas-wix", avatarUrl: "a.png" };
 const response: PullDetailResponse = {
 	repository: {
 		pullRequest: {
+			id: "PR_kwDOabc123",
 			title: "Add pages",
 			url: "https://github.com/wix-private/ricos/pull/7",
 			body: "Body",

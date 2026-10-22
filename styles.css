@@ -922,3 +922,58 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 .github-link-pr-file-count {
 	color: var(--text-muted);
 }
+
+/* Sticky status bar of the pull request pane */
+.github-link-pr-bar {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin: -12px -12px 12px;
+	padding: 8px 12px;
+	background-color: var(--background-primary);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+.github-link-pr-bar-chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+.github-link-pr-bar button {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 0 auto;
+}
+.github-link-pr-bar button svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+.github-link-pr-bar button.is-loading {
+	opacity: 0.6;
+}
+.github-link-pr-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 8px 1px 6px;
+	border-radius: 2em;
+	font-size: var(--font-ui-smaller);
+	background-color: var(--background-modifier-hover);
+}
+.github-link-pr-chip[data-tone="success"] {
+	color: var(--gh-color-success-fg);
+}
+.github-link-pr-chip[data-tone="danger"] {
+	color: var(--gh-color-danger-fg);
+}
+.github-link-pr-chip[data-tone="attention"] {
+	color: var(--gh-color-attention-fg);
+}
+.github-link-pr-chip[data-tone="neutral"] {
+	color: var(--text-muted);
+}
