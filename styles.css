@@ -1067,3 +1067,48 @@ a.github-link-pr-file:hover {
 	width: var(--icon-s);
 	height: var(--icon-s);
 }
+
+/* CI report: validation failures and deploy previews */
+.github-link-pr-failure {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+.github-link-pr-failure-validation {
+	color: var(--gh-color-danger-fg);
+}
+.github-link-pr-failure-package {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+.github-link-pr-preview-package {
+	margin-top: 4px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+.github-link-pr-preview {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.github-link-pr-preview-link {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.github-link-pr-preview-type {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+.github-link-pr-preview .clickable-icon svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}

@@ -25,6 +25,7 @@ import { diffAnchor } from "../github/diff-anchor";
 import { relativeTime } from "../util";
 import { pullWatcher } from "../watch/watcher";
 import { pullStateChannel } from "../query/pull-state";
+import { findCiReport, queryParams } from "./ci-report";
 import { bindCountdown, formatCountdown } from "./countdown";
 import { getDraftAction, getMergeAction } from "./merge-action";
 import { formatForLlm } from "./llm-copy";
@@ -298,6 +299,7 @@ export class PullRequestView extends ItemView {
 		this.renderStack(body, pull);
 		this.renderReviewers(body, pull);
 		this.renderChecks(body, pull);
+		this.renderCiReport(body, pull);
 		this.renderDescription(body, pull);
 		this.renderConversation(body, pull);
 		this.renderFiles(body, pull);
@@ -458,6 +460,56 @@ export class PullRequestView extends ItemView {
 		setIcon(pill.createSpan({ cls: "github-link-pr-row-icon" }), TONE_ICON[tone]);
 		pill.createSpan({ text });
 		return pill;
+	}
+
+	/**
+	 * The CI bot's "Validation Failures" and "Deploy previews" tables, lifted out of the conversation.
+	 * Preview links keep the address as written and can copy just their query parameters, which the
+	 * bot's Markdown link text often hides.
+	 */
+	private renderCiReport(parent: HTMLElement, pull: PullDetail): void {
+		const report = findCiReport(pull.timeline);
+		if (!report) {
+			return;
+		}
+
+		if (report.failures.length > 0) {
+			const body = this.section(parent, "Validation failures", true, `${report.failures.length}`);
+			for (const failure of report.failures) {
+				const row = body.createDiv({ cls: "github-link-pr-failure" });
+				row.createSpan({ cls: "github-link-pr-failure-validation", text: failure.validation });
+				row.createSpan({ cls: "github-link-pr-failure-package", text: failure.pkg });
+				if (failure.logUrl) {
+					row.createEl("a", { text: "View log", href: failure.logUrl, attr: { target: "_blank" } });
+				}
+			}
+		}
+
+		if (report.previews.length > 0) {
+			const body = this.section(parent, "Deploy previews", true, `${report.previews.length}`);
+			let pkg: string | null = null;
+			for (const preview of report.previews) {
+				if (preview.pkg !== pkg) {
+					pkg = preview.pkg;
+					body.createDiv({ cls: "github-link-pr-preview-package", text: preview.pkg });
+				}
+				const row = body.createDiv({ cls: "github-link-pr-preview" });
+				row.createEl("a", {
+					cls: "github-link-pr-preview-link",
+					text: preview.label,
+					href: preview.url,
+					attr: { target: "_blank", title: preview.url },
+				});
+				row.createSpan({ cls: "github-link-pr-preview-type", text: preview.type });
+				this.action(row, "lucide-copy", "Copy link", () => this.copy(preview.url, "Copied link"));
+				const params = queryParams(preview.url);
+				if (params) {
+					this.action(row, "lucide-code", "Copy query parameters only", () =>
+						this.copy(params, "Copied query parameters"),
+					);
+				}
+			}
+		}
 	}
 
 	private renderReadiness(parent: HTMLElement, pull: PullDetail): void {
