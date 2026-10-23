@@ -21,6 +21,7 @@ import type { CheckState, PullDetail, ReviewState, TimelineComment, TimelineItem
 import { POLL_DELAY_MS, pollDelayMs, pullKey, type PullRef, type PullStatus } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
 import { setPRIcon } from "../icon";
+import { diffAnchor } from "../github/diff-anchor";
 import { relativeTime } from "../util";
 import { pullWatcher } from "../watch/watcher";
 import { pullStateChannel } from "../query/pull-state";
@@ -860,9 +861,26 @@ export class PullRequestView extends ItemView {
 			true,
 			`${pull.changedFiles} · +${pull.additions} −${pull.deletions}`,
 		);
+		// The whole tab, from the section header (a link inside <summary> does not toggle the section)
+		const filesTab = `${pull.url}/changes`;
+		const headerLink = body.parentElement?.querySelector("summary")?.createEl("a", {
+			cls: "github-link-pr-section-link",
+			href: filesTab,
+			attr: { target: "_blank", "aria-label": "Open Files changed on GitHub" },
+		});
+		if (headerLink) {
+			setIcon(headerLink, "lucide-external-link");
+		}
+
 		const largest = Math.max(...pull.files.map((file) => file.additions + file.deletions), 1);
 		for (const file of pull.files) {
-			const row = body.createDiv({ cls: "github-link-pr-file" });
+			// Opens the files tab right away; once the file's anchor is computed it also scrolls to the file
+			const row = body.createEl("a", {
+				cls: "github-link-pr-file",
+				href: filesTab,
+				attr: { target: "_blank", "aria-label": `Open ${file.path} on GitHub` },
+			});
+			void diffAnchor(file.path).then((anchor) => row.setAttribute("href", `${filesTab}#${anchor}`));
 			row.createSpan({ cls: "github-link-pr-file-path", text: file.path, attr: { title: file.path } });
 			const bar = row.createSpan({ cls: "github-link-pr-file-bar" });
 			const added = bar.createSpan({ cls: "is-added" });

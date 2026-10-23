@@ -1049,3 +1049,21 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 .github-link-pr-comment.is-copyable:hover {
 	background-color: var(--background-modifier-hover);
 }
+
+/* Files changed: each row links to its diff on GitHub */
+a.github-link-pr-file {
+	color: inherit;
+	text-decoration: none;
+	border-radius: var(--radius-s);
+}
+a.github-link-pr-file:hover {
+	background-color: var(--background-modifier-hover);
+}
+.github-link-pr-section-link {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+.github-link-pr-section-link svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
