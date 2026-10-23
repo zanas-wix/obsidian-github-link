@@ -1010,3 +1010,8 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 .github-link-pr-checks-group > .github-link-pr-row {
 	padding-inline-start: 22px;
 }
+
+/* A pane button that is switched on, such as the watch bell */
+.github-link-pr-actions .clickable-icon.is-active {
+	color: var(--interactive-accent);
+}

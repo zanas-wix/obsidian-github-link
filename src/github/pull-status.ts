@@ -12,6 +12,8 @@ export interface PullRef {
 }
 
 export interface PullStatus {
+	state: "open" | "closed" | "merged";
+	draft: boolean;
 	/** Combined review state; null when no review is required or requested */
 	review: "approved" | "changes-requested" | "review-required" | null;
 	merge: "mergeable" | "conflicting" | "unknown";
@@ -43,6 +45,8 @@ export function buildPullStatusQuery(refs: PullRef[]): string {
 		validatePullRef(ref);
 		return `p${i}: repository(owner: "${ref.org}", name: "${ref.repo}") {
 	pullRequest(number: ${ref.number}) {
+		state
+		isDraft
 		reviewDecision
 		mergeable
 		commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) {
@@ -62,6 +66,8 @@ interface RawContext {
 }
 
 interface RawPull {
+	state?: string;
+	isDraft?: boolean;
 	reviewDecision?: string | null;
 	mergeable?: string;
 	commits?: {
@@ -97,6 +103,8 @@ function toStatus(pull: RawPull): PullStatus {
 	else if (rollup?.state === "PENDING" || rollup?.state === "EXPECTED") ci = "pending";
 
 	return {
+		state: pull.state === "MERGED" ? "merged" : pull.state === "CLOSED" ? "closed" : "open",
+		draft: Boolean(pull.isDraft),
 		review:
 			pull.reviewDecision === "APPROVED"
 				? "approved"
@@ -108,6 +116,20 @@ function toStatus(pull: RawPull): PullStatus {
 		merge: pull.mergeable === "MERGEABLE" ? "mergeable" : pull.mergeable === "CONFLICTING" ? "conflicting" : "unknown",
 		ci: { state: ci, passed, total: contexts.length },
 	};
+}
+
+/**
+ * Whether the pull request can be merged right now: open, not a draft, approved (or no review needed),
+ * every check passed (or there are none), and no conflicts.
+ */
+export function isReadyToMerge(status: PullStatus): boolean {
+	return (
+		status.state === "open" &&
+		!status.draft &&
+		(status.review === "approved" || status.review === null) &&
+		(status.ci.state === "success" || status.ci.state === null) &&
+		status.merge === "mergeable"
+	);
 }
 
 /** Skipped and neutral checks do not hold a PR back, so they count as passing */

@@ -1,4 +1,5 @@
 import { LogLevel } from "../logger";
+import type { WatchedPull } from "../watch/watcher";
 
 export const DATA_VERSION = 1;
 
@@ -15,6 +16,8 @@ export interface GithubLinkPluginData {
 	settings: GithubLinkPluginSettings;
 	cache: string[] | null;
 	dataVersion: number;
+	/** Pull requests to notify about once they can be merged; absent in data saved by older versions */
+	watched?: WatchedPull[];
 }
 
 export interface GithubLinkPluginSettings {

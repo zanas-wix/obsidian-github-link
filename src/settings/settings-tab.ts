@@ -492,6 +492,8 @@ export class GithubLinkPluginSettingsTab extends PluginSettingTab {
 			cache: PluginData.cache,
 			settings: PluginSettings,
 			dataVersion: DATA_VERSION,
+			// Saved here too, or changing a setting would forget which pull requests are watched
+			watched: PluginData.watched,
 		};
 		return this.plugin.saveData(newData);
 	}

@@ -21,6 +21,7 @@ import { pullKey, type PullRef } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
 import { setPRIcon } from "../icon";
 import { relativeTime } from "../util";
+import { pullWatcher } from "../watch/watcher";
 import { getDraftAction, getMergeAction } from "./merge-action";
 import { QUICK_COMMENTS } from "./quick-comments";
 import { getReadiness, type Tone } from "./readiness";
@@ -111,6 +112,14 @@ export class PullRequestView extends ItemView {
 					void this.refresh(true);
 				}
 			}, AUTO_REFRESH_MS),
+		);
+		// A watch also ends by itself (notified, merged, closed), which changes the bell
+		this.register(
+			pullWatcher.subscribe(() => {
+				const scroll = this.contentEl.scrollTop;
+				this.render();
+				this.contentEl.scrollTop = scroll;
+			}),
 		);
 		this.render();
 		return Promise.resolve();
@@ -280,7 +289,31 @@ export class PullRequestView extends ItemView {
 				this.setDraft(toDraft, pull, true),
 			);
 		}
+		if (pull.state === "open") {
+			const watching = pullWatcher.has(pull.ref);
+			this.action(
+				actions,
+				watching ? "lucide-bell-ring" : "lucide-bell",
+				watching ? "Stop notifying me about this PR" : "Notify me when this PR can be merged",
+				() => this.toggleWatch(pull),
+			).toggleClass("is-active", watching);
+		}
 		this.action(actions, "lucide-refresh-cw", "Refresh", () => void this.refresh(false));
+	}
+
+	/**
+	 * Start or stop being notified when this pull request can be merged. Starting checks it right away,
+	 * so a PR that is already ready is announced immediately rather than a minute later.
+	 */
+	private toggleWatch(pull: PullDetail): void {
+		if (pullWatcher.has(pull.ref)) {
+			pullWatcher.remove(pull.ref);
+			new Notice(`No longer watching #${pull.ref.number}`, 2000);
+			return;
+		}
+		pullWatcher.add({ ref: pull.ref, title: pull.title });
+		new Notice(`Watching #${pull.ref.number}: you will be notified when it can be merged`, 4000);
+		void pullWatcher.tick();
 	}
 
 	private action(parent: HTMLElement, icon: string, label: string, onClick: () => void): HTMLButtonElement {

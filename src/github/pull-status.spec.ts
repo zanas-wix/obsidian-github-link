@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { buildPullStatusQuery, parsePullStatuses, pullKey } from "./pull-status";
+import { buildPullStatusQuery, isReadyToMerge, parsePullStatuses, pullKey, type PullStatus } from "./pull-status";
 
 const refs = [
 	{ org: "wix-private", repo: "ricos", number: 1 },
@@ -63,11 +63,15 @@ describe("parsePullStatuses", () => {
 		const statuses = parsePullStatuses(refs, data);
 
 		expect(statuses.get(pullKey(refs[0]))).toEqual({
+			state: "open",
+			draft: false,
 			review: "approved",
 			merge: "mergeable",
 			ci: { state: "failure", passed: 3, total: 5 },
 		});
 		expect(statuses.get(pullKey(refs[1]))).toEqual({
+			state: "open",
+			draft: false,
 			review: null,
 			merge: "conflicting",
 			ci: { state: null, passed: 0, total: 0 },
@@ -76,5 +80,35 @@ describe("parsePullStatuses", () => {
 
 	it("omits pull requests GitHub did not return", () => {
 		expect(parsePullStatuses(refs, data).has(pullKey(refs[2]))).toBe(false);
+	});
+});
+
+describe("isReadyToMerge", () => {
+	const ready: PullStatus = {
+		state: "open",
+		draft: false,
+		review: "approved",
+		merge: "mergeable",
+		ci: { state: "success", passed: 3, total: 3 },
+	};
+
+	it("is ready when approved, green and conflict-free", () => {
+		expect(isReadyToMerge(ready)).toBe(true);
+		expect(isReadyToMerge({ ...ready, review: null, ci: { state: null, passed: 0, total: 0 } })).toBe(true);
+	});
+
+	it("is not ready while anything is outstanding", () => {
+		for (const blocked of [
+			{ draft: true },
+			{ state: "merged" },
+			{ review: "review-required" },
+			{ review: "changes-requested" },
+			{ merge: "conflicting" },
+			{ merge: "unknown" },
+			{ ci: { state: "pending", passed: 1, total: 3 } },
+			{ ci: { state: "failure", passed: 2, total: 3 } },
+		]) {
+			expect(isReadyToMerge({ ...ready, ...blocked } as PullStatus)).toBe(false);
+		}
 	});
 });

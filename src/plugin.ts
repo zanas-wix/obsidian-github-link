@@ -12,6 +12,12 @@ import { QueryProcessor } from "./query/processor";
 import { DATA_VERSION } from "./settings/types";
 import { getGhToken } from "./github/gh-token";
 import { PullRequestView, PULL_VIEW_TYPE, type PullPaneTarget } from "./pr-view/pr-view";
+import { getPullStatuses } from "./github/github";
+import { notifyReady } from "./watch/notify";
+import { pullWatcher } from "./watch/watcher";
+
+/** How often watched pull requests are checked */
+const WATCH_INTERVAL_MS = 60 * 1000;
 
 export const PluginSettings: GithubLinkPluginSettings = { ...DEFAULT_SETTINGS };
 export const PluginData: GithubLinkPluginData = { cache: null, settings: PluginSettings, dataVersion: DATA_VERSION };
@@ -107,6 +113,22 @@ export class GithubLinkPlugin extends Plugin {
 			callback: () => void openPullRequestPane(),
 		});
 		this.setCacheInterval();
+
+		pullWatcher.init(
+			{
+				fetchStatuses: (refs, maxAgeMs) => getPullStatuses(refs, maxAgeMs),
+				notifyReady,
+				save: async (watched) => {
+					PluginData.watched = watched;
+					await this.saveData(PluginData);
+				},
+				log: (message, error) => logger.warn(`${message}: ${String(error)}`),
+			},
+			PluginData.watched ?? [],
+		);
+		// Not tied to a note or a visible pane: this is what notifies while Obsidian sits in the background
+		this.registerInterval(window.setInterval(() => void pullWatcher.tick(), WATCH_INTERVAL_MS));
+		window.setTimeout(() => void pullWatcher.tick(), 5000);
 
 		// Prefetch gh CLI token so the first link preview doesn't pay the subprocess cost
 		if (PluginSettings.useGhCli) {
