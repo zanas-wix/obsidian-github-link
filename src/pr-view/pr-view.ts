@@ -22,6 +22,7 @@ import { IssueStatus } from "../github/response";
 import { setPRIcon } from "../icon";
 import { relativeTime } from "../util";
 import { pullWatcher } from "../watch/watcher";
+import { pullStateChannel } from "../query/pull-state";
 import { getDraftAction, getMergeAction } from "./merge-action";
 import { QUICK_COMMENTS } from "./quick-comments";
 import { getReadiness, type Tone } from "./readiness";
@@ -167,6 +168,8 @@ export class PullRequestView extends ItemView {
 			}
 			const unchanged = silent && JSON.stringify(detail) === JSON.stringify(this.detail);
 			this.detail = detail;
+			// Every list showing this PR follows what GitHub says now (e.g. it was merged)
+			pullStateChannel.publish({ key: pullKey(detail.ref), state: detail.state, draft: detail.draft });
 			if (!unchanged) {
 				const scroll = this.contentEl.scrollTop;
 				this.render();

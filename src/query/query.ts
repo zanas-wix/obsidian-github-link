@@ -14,6 +14,7 @@ import { openPullRequestPane, PluginSettings } from "../plugin";
 import { getProp, isEqual, relativeTime, titleCase } from "../util";
 import { getPaneSelection, onPaneSelection, setPaneSelection } from "../pr-view/selection";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
+import { applyPullState, pullStateChannel, type PullState } from "./pull-state";
 import { expandOrQuery } from "./or-query";
 import { resolveRelativeDates } from "./relative-date";
 import { groupIntoStacks, rowStackPositions, type PullBranches } from "./stack";
@@ -31,6 +32,8 @@ export class GithubQuery {
 	private statusMaxAgeMs = INITIAL_STATUS_MAX_AGE_MS;
 	/** Cards of this block by pull request key, so they can follow the side pane */
 	private readonly cardsByKey = new Map<string, HTMLElement>();
+	/** Rows by pull request key, so a state learned elsewhere can update the row */
+	private readonly rowsByKey = new Map<string, TableResult[number]>();
 	private selectedCard: HTMLElement | null = null;
 
 	/**
@@ -136,6 +139,7 @@ export class GithubQuery {
 
 	constructor(private readonly hostElement: HTMLElement) {
 		onPaneSelection(this, (query, key) => query.applySelection(key));
+		pullStateChannel.subscribe(this, (query, { key, state, draft }) => query.applyState(key, state, draft));
 	}
 
 	public async init(source: string): Promise<void> {
@@ -254,6 +258,7 @@ export class GithubQuery {
 				const status = org && repo ? statuses.get(pullKey({ org, repo, number: row.number })) : undefined;
 				if (status) {
 					rowPullStatuses.set(row, status);
+					applyPullState(row, status.state, status.draft);
 				}
 			}
 			return true;
@@ -317,6 +322,36 @@ export class GithubQuery {
 				cell.empty();
 				void ALL_COLUMNS[this.params.queryType][column]?.cell(row, cell);
 			}
+		}
+		// A status load also learns whether a PR was merged, closed or made draft meanwhile
+		for (const key of this.rowsByKey.keys()) {
+			this.redrawStateIcon(key);
+		}
+	}
+
+	/**
+	 * A PR's state was learned after this list loaded (the pane reloaded it): update its row and icon.
+	 */
+	private applyState(key: string, state: PullState, draft: boolean): void {
+		const row = this.rowsByKey.get(key);
+		if (!this.hostElement.isConnected || !row) {
+			return;
+		}
+		if (applyPullState(row, state, draft)) {
+			if (this.params.outputType === OutputType.Cards) {
+				this.redrawStateIcon(key);
+			} else {
+				this.render();
+			}
+		}
+	}
+
+	private redrawStateIcon(key: string): void {
+		const row = this.rowsByKey.get(key);
+		const cell = this.cardsByKey.get(key)?.querySelector<HTMLElement>(".github-link-card-status");
+		if (row && cell) {
+			cell.empty();
+			void ALL_COLUMNS[this.params.queryType]["status"]?.cell(row, cell);
 		}
 	}
 
@@ -458,6 +493,15 @@ export class GithubQuery {
 		const columns = this.getColumns();
 		this.statusCells.clear();
 		this.cardsByKey.clear();
+		this.rowsByKey.clear();
+		if (queryType === QueryType.PullRequest) {
+			for (const row of this.result) {
+				const [org, repo] = this.getRepoFullName(row)?.split("/") ?? [];
+				if (org && repo) {
+					this.rowsByKey.set(pullKey({ org, repo, number: row.number }), row);
+				}
+			}
+		}
 
 		if (this.params.outputType === OutputType.Cards) {
 			const wrapper = this.hostElement.createDiv({ cls: "github-link-cards-wrapper" });
