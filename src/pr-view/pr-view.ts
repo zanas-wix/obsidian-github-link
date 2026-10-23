@@ -479,7 +479,12 @@ export class PullRequestView extends ItemView {
 			const grid = body.createDiv({ cls: "github-link-pr-failures" });
 			for (const failure of report.failures) {
 				const row = grid.createDiv({ cls: "github-link-pr-failure" });
-				row.createSpan({ cls: "github-link-pr-failure-validation", text: failure.validation });
+				// "test:ci script" -> "test:ci": every validation is a script, so the suffix is noise
+				row.createSpan({
+					cls: "github-link-pr-failure-validation",
+					text: failure.validation.replace(/ script$/i, ""),
+					attr: { title: failure.validation },
+				});
 				row.createSpan({ cls: "github-link-pr-failure-package", text: failure.pkg });
 				if (failure.logUrl) {
 					row.createEl("a", { text: "View log", href: failure.logUrl, attr: { target: "_blank" } });
