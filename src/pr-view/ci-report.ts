@@ -71,15 +71,20 @@ export function findCiReport(timeline: TimelineItem[]): CiReport | null {
 }
 
 /**
- * Everything after the first `?`, so it can be pasted next to another address. Empty when there is none.
+ * Everything after the first `?`, so it can be pasted next to another address, minus the parameters
+ * named in `exclude`. Parameters keep their original encoding. Empty when none are left.
  */
-export function queryParams(url: string): string {
+export function queryParams(url: string, exclude: string[] = []): string {
 	const start = url.indexOf("?");
 	if (start === -1) {
 		return "";
 	}
 	const end = url.indexOf("#", start);
-	return url.slice(start + 1, end === -1 ? undefined : end);
+	const query = url.slice(start + 1, end === -1 ? undefined : end);
+	return query
+		.split("&")
+		.filter((param) => param && !exclude.includes(param.split("=")[0]))
+		.join("&");
 }
 
 /** Body rows of the first Markdown table within a few lines after `headingIndex`, as trimmed cells */

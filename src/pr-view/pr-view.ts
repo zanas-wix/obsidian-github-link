@@ -441,8 +441,8 @@ export class PullRequestView extends ItemView {
 		return button;
 	}
 
-	private copy(text: string, notice: string): void {
-		void window.navigator.clipboard.writeText(text).then(() => new Notice(notice, 2000));
+	private copy(text: string, notice: string, durationMs = 2000): void {
+		void window.navigator.clipboard.writeText(text).then(() => new Notice(notice, durationMs));
 	}
 
 	private person(parent: HTMLElement, login: string, avatar: string | null): HTMLElement {
@@ -502,10 +502,11 @@ export class PullRequestView extends ItemView {
 				});
 				row.createSpan({ cls: "github-link-pr-preview-type", text: preview.type });
 				this.action(row, "lucide-copy", "Copy link", () => this.copy(preview.url, "Copied link"));
-				const params = queryParams(preview.url);
+				// The site id is specific to one test site, so it stays out of what gets copied
+				const params = queryParams(preview.url, ["metaSiteId"]);
 				if (params) {
-					this.action(row, "lucide-code", "Copy query parameters only", () =>
-						this.copy(params, "Copied query parameters"),
+					this.action(row, "lucide-code", "Copy query parameters only (without metaSiteId)", () =>
+						this.copy(params, `Copied: ${params.length > 140 ? `${params.slice(0, 140)}…` : params}`, 6000),
 					);
 				}
 			}

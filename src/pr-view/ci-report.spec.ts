@@ -67,6 +67,12 @@ describe("queryParams", () => {
 		expect(queryParams("https://e.wix.com/a?x=1&ricos-tpa-override=f7e#frag")).toBe("x=1&ricos-tpa-override=f7e");
 		expect(queryParams("https://ricos.dev/")).toBe("");
 	});
+
+	it("leaves out the excluded parameters and keeps the rest as written", () => {
+		const url = "https://e.wix.com/a?metaSiteId=266b&editorSessionId=be80&ricos-tpa-override=f7e%2F94";
+		expect(queryParams(url, ["metaSiteId"])).toBe("editorSessionId=be80&ricos-tpa-override=f7e%2F94");
+		expect(queryParams("https://e.wix.com/a?metaSiteId=266b", ["metaSiteId"])).toBe("");
+	});
 });
 
 describe("findCiReport", () => {
