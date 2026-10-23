@@ -119,17 +119,27 @@ function toStatus(pull: RawPull): PullStatus {
 }
 
 /**
+ * What still stands between an open pull request and a merge, in words; empty when nothing does.
+ * One authority for "can be merged", so notifications and merge buttons cannot disagree.
+ */
+export function mergeBlockers(status: PullStatus): string[] {
+	const blockers: string[] = [];
+	if (status.draft) blockers.push("still a draft");
+	if (status.review === "review-required") blockers.push("review required");
+	if (status.review === "changes-requested") blockers.push("changes requested");
+	if (status.ci.state === "failure") blockers.push("CI failing");
+	if (status.ci.state === "pending") blockers.push("CI running");
+	if (status.merge === "conflicting") blockers.push("merge conflicts");
+	if (status.merge === "unknown") blockers.push("conflicts not checked yet");
+	return blockers;
+}
+
+/**
  * Whether the pull request can be merged right now: open, not a draft, approved (or no review needed),
  * every check passed (or there are none), and no conflicts.
  */
 export function isReadyToMerge(status: PullStatus): boolean {
-	return (
-		status.state === "open" &&
-		!status.draft &&
-		(status.review === "approved" || status.review === null) &&
-		(status.ci.state === "success" || status.ci.state === null) &&
-		status.merge === "mergeable"
-	);
+	return status.state === "open" && mergeBlockers(status).length === 0;
 }
 
 /** Skipped and neutral checks do not hold a PR back, so they count as passing */

@@ -13,7 +13,7 @@ import { DATA_VERSION } from "./settings/types";
 import { getGhToken } from "./github/gh-token";
 import { PullRequestView, PULL_VIEW_TYPE, type PullPaneTarget } from "./pr-view/pr-view";
 import { getPullStatuses } from "./github/github";
-import { notifyReady } from "./watch/notify";
+import { notify } from "./watch/notify";
 import { pullWatcher } from "./watch/watcher";
 
 /** How often watched pull requests are checked */
@@ -117,7 +117,7 @@ export class GithubLinkPlugin extends Plugin {
 		pullWatcher.init(
 			{
 				fetchStatuses: (refs, maxAgeMs) => getPullStatuses(refs, maxAgeMs),
-				notifyReady,
+				notify,
 				save: async (watched) => {
 					PluginData.watched = watched;
 					await this.saveData(PluginData);

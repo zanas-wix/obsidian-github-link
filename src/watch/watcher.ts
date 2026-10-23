@@ -1,4 +1,4 @@
-import { isReadyToMerge, pullKey, type PullRef, type PullStatus } from "../github/pull-status";
+import { isReadyToMerge, mergeBlockers, pullKey, type PullRef, type PullStatus } from "../github/pull-status";
 
 /**
  * Pull requests the user asked to be told about once they can be merged.
@@ -7,12 +7,22 @@ export interface WatchedPull {
 	ref: PullRef;
 	/** Title when the watch was set, for the notification text */
 	title: string;
+	/** What the last check saw; milestones are changes from this. Unset until the first check. */
+	seen?: { ci: PullStatus["ci"]["state"]; review: PullStatus["review"] };
 }
+
+/**
+ * What a notification announces: the pull request can be merged, or a milestone on the way there
+ * (CI went green, it was approved) together with what is still outstanding.
+ */
+export type WatchEvent =
+	| { kind: "ready" }
+	| { kind: "progress"; ciPassed: boolean; approved: boolean; blockers: string[] };
 
 export interface WatcherDeps {
 	/** Batched status lookup; `maxAgeMs` lets it reuse statuses fetched moments ago */
 	fetchStatuses: (refs: PullRef[], maxAgeMs: number) => Promise<Map<string, PullStatus>>;
-	notifyReady: (pull: WatchedPull) => void;
+	notify: (pull: WatchedPull, event: WatchEvent) => void;
 	save: (watched: WatchedPull[]) => void | Promise<void>;
 	log: (message: string, error?: unknown) => void;
 }
@@ -23,8 +33,10 @@ const MAX_SKIP_TICKS = 16;
 const STATUS_MAX_AGE_MS = 30 * 1000;
 
 /**
- * Polls watched pull requests (one batched request per 25) and notifies once when one becomes ready
- * to merge. A watch ends when the notification is sent, or when the pull request is merged or closed.
+ * Polls watched pull requests (one batched request per 25). Notifies when CI turns green, when the
+ * PR is approved, and once more when it can be merged, which ends the watch (as does merging or
+ * closing it). Milestones are changes seen between checks, so a PR that is already green when the
+ * watch starts is not announced as news.
  */
 export class PullWatcher {
 	private deps: WatcherDeps | null = null;
@@ -91,23 +103,38 @@ export class PullWatcher {
 			this.failures = 0;
 
 			let finished = false;
+			let seenChanged = false;
 			for (const pull of watched) {
 				const status = statuses.get(pullKey(pull.ref));
 				// Missing means GitHub did not return it (no access); keep waiting rather than guess
 				if (!status) {
 					continue;
 				}
-				if (isReadyToMerge(status)) {
-					deps.notifyReady(pull);
-				} else if (status.state === "open") {
-					continue;
+				if (status.state !== "open") {
+					this.watched.delete(pullKey(pull.ref));
+					finished = true;
+				} else if (isReadyToMerge(status)) {
+					deps.notify(pull, { kind: "ready" });
+					this.watched.delete(pullKey(pull.ref));
+					finished = true;
+				} else {
+					const previous = pull.seen;
+					const ciPassed = previous !== undefined && previous.ci !== "success" && status.ci.state === "success";
+					const approved = previous !== undefined && previous.review !== "approved" && status.review === "approved";
+					if (ciPassed || approved) {
+						deps.notify(pull, { kind: "progress", ciPassed, approved, blockers: mergeBlockers(status) });
+					}
+					if (previous?.ci !== status.ci.state || previous?.review !== status.review) {
+						pull.seen = { ci: status.ci.state, review: status.review };
+						seenChanged = true;
+					}
 				}
-				// Notified, merged or closed: nothing left to watch
-				this.watched.delete(pullKey(pull.ref));
-				finished = true;
 			}
 			if (finished) {
 				this.changed();
+			} else if (seenChanged) {
+				// Remember it for the next start, but nothing visible changed
+				void deps.save(this.list());
 			}
 		} catch (error) {
 			this.failures++;
