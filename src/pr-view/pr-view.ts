@@ -498,18 +498,16 @@ export class PullRequestView extends ItemView {
 			for (const preview of report.previews) {
 				if (preview.pkg !== pkg) {
 					pkg = preview.pkg;
-					body.createDiv({ cls: "github-link-pr-preview-package", text: preview.pkg });
-					// First item of the group: the package's first link stands for all of them, as they share one
-					// override parameter. metaSiteId and editorSessionId belong to one test site and editor session,
-					// so they are left out.
+					const heading = body.createDiv({ cls: "github-link-pr-preview-package", text: preview.pkg });
+					// Clicking the package name copies its query parameters. The package's first link stands for
+					// all of them, as they share one override parameter. metaSiteId and editorSessionId belong to
+					// one test site and editor session, so they are left out.
 					const params = queryParams(preview.url, ["metaSiteId", "editorSessionId"]);
 					if (params) {
-						const paramsEl = body.createDiv({
-							cls: "github-link-pr-preview-params",
-							text: `?${params}`,
-							attr: { "aria-label": "Click to copy the query parameters", title: params },
-						});
-						paramsEl.addEventListener("click", () =>
+						heading.addClass("is-copyable");
+						heading.setAttribute("aria-label", "Click to copy the query parameters");
+						heading.setAttribute("title", `?${params}`);
+						heading.addEventListener("click", () =>
 							this.copy(params, `Copied: ${params.length > 140 ? `${params.slice(0, 140)}…` : params}`, 6000),
 						);
 					}

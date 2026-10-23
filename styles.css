@@ -1098,19 +1098,12 @@ a.github-link-pr-file:hover {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
-/* Clicking the parameters copies them */
-.github-link-pr-preview-params {
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-family: var(--font-monospace);
+/* A package name with query parameters copies them when clicked */
+.github-link-pr-preview-package.is-copyable {
 	cursor: copy;
 	border-radius: var(--radius-s);
 }
-.github-link-pr-preview-params:hover {
+.github-link-pr-preview-package.is-copyable:hover {
 	color: var(--text-normal);
 	background-color: var(--background-modifier-hover);
 }
