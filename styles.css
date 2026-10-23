@@ -1135,11 +1135,6 @@ a.github-link-pr-file:hover {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.github-link-pr-preview-type {
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-	white-space: nowrap;
-}
 .github-link-pr-preview .clickable-icon svg {
 	width: var(--icon-s);
 	height: var(--icon-s);

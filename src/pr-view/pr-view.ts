@@ -25,7 +25,7 @@ import { diffAnchor } from "../github/diff-anchor";
 import { relativeTime } from "../util";
 import { pullWatcher } from "../watch/watcher";
 import { pullStateChannel } from "../query/pull-state";
-import { findCiReport, queryParams } from "./ci-report";
+import { findCiReport, linkDomain, queryParams } from "./ci-report";
 import { bindCountdown, formatCountdown } from "./countdown";
 import { getDraftAction, getMergeAction } from "./merge-action";
 import { formatForLlm } from "./llm-copy";
@@ -516,13 +516,13 @@ export class PullRequestView extends ItemView {
 					}
 				}
 				const row = body.createDiv({ cls: "github-link-pr-preview" });
+				// Only the domain is shown; the link still opens the full address (see the tooltip)
 				row.createEl("a", {
 					cls: "github-link-pr-preview-link",
-					text: preview.label,
+					text: linkDomain(preview.url, preview.label),
 					href: preview.url,
 					attr: { target: "_blank", title: preview.url },
 				});
-				row.createSpan({ cls: "github-link-pr-preview-type", text: preview.type });
 			}
 		}
 	}

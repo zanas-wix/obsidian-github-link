@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { TimelineItem } from "../github/pull-detail";
-import { findCiReport, parseCiReport, queryParams } from "./ci-report";
+import { findCiReport, linkDomain, parseCiReport, queryParams } from "./ci-report";
 
 const BODY = `<h3> &#9940;&nbsp; Status: Failed </h3>
 <p>To re-trigger the build, add the comment <code>#rebuild</code></p>
@@ -93,5 +93,16 @@ describe("findCiReport", () => {
 	it("ignores comments that are not CI reports", () => {
 		expect(findCiReport([comment(BODY, "2026-01-01"), comment("thanks!", "2026-01-02")])?.previews).toHaveLength(4);
 		expect(findCiReport([comment("thanks!", "2026-01-01")])).toBeNull();
+	});
+});
+
+describe("linkDomain", () => {
+	it("keeps only the domain, whatever the path and query", () => {
+		expect(linkDomain("https://editor.wix.com/html/editor/web?x=1#a", "?")).toBe("editor.wix.com");
+		expect(linkDomain("https://m.wix.com/%7Broute%7D?a=b", "?")).toBe("m.wix.com");
+	});
+
+	it("falls back to the given text when the address does not parse", () => {
+		expect(linkDomain("not a url", "label")).toBe("label");
 	});
 });

@@ -87,6 +87,18 @@ export function queryParams(url: string, exclude: string[] = []): string {
 		.join("&");
 }
 
+/**
+ * Just the domain of a link ("editor.wix.com"), for showing it compactly; the full address stays the
+ * link target. Falls back to `fallback` when the address does not parse.
+ */
+export function linkDomain(url: string, fallback: string): string {
+	try {
+		return new URL(url).hostname;
+	} catch {
+		return fallback;
+	}
+}
+
 /** Body rows of the first Markdown table within a few lines after `headingIndex`, as trimmed cells */
 function tableAfter(lines: string[], headingIndex: number): string[][] {
 	if (headingIndex === -1) {
