@@ -824,7 +824,7 @@ export class PullRequestView extends ItemView {
 		const body = this.section(
 			parent,
 			"Files changed",
-			false,
+			true,
 			`${pull.changedFiles} · +${pull.additions} −${pull.deletions}`,
 		);
 		const largest = Math.max(...pull.files.map((file) => file.additions + file.deletions), 1);
