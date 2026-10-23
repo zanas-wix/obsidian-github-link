@@ -1,5 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
-import { buildAutoMergeMutation, buildCommentMutation, buildDraftMutation, buildMergeMutation } from "./pull-actions";
+import {
+	buildAutoMergeMutation,
+	buildCloseMutation,
+	buildCommentMutation,
+	buildDraftMutation,
+	buildMergeMutation,
+} from "./pull-actions";
 
 describe("pull request mutations", () => {
 	it("escapes comment text so it cannot break out of the string", () => {
@@ -20,5 +26,12 @@ describe("pull request mutations", () => {
 		expect(() => buildMergeMutation(bad)).toThrow();
 		expect(() => buildAutoMergeMutation(bad, true)).toThrow();
 		expect(() => buildDraftMutation(bad, false)).toThrow();
+		expect(() => buildCloseMutation(bad)).toThrow();
+	});
+
+	it("closes the PR it is given, without merging", () => {
+		expect(buildCloseMutation("PR_abc")).toBe(
+			'mutation { closePullRequest(input: { pullRequestId: "PR_abc" }) { pullRequest { id } } }',
+		);
 	});
 });

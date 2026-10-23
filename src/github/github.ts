@@ -2,11 +2,17 @@ import { RequestError, mapObject } from "../util";
 
 import type { GithubAccount } from "../settings";
 import { PluginSettings } from "../plugin";
-import { getGhTokenSync } from "./gh-token";
 import { issueListSortFromQuery, pullListSortFromQuery, searchSortFromQuery } from "../query/sort";
 import type { QueryParams } from "../query/types";
+import { getGhTokenSync } from "./gh-token";
 import { buildPullDetailQuery, parsePullDetail, type PullDetail, type PullDetailResponse } from "./pull-detail";
-import { buildAutoMergeMutation, buildCommentMutation, buildDraftMutation, buildMergeMutation } from "./pull-actions";
+import {
+	buildAutoMergeMutation,
+	buildCloseMutation,
+	buildCommentMutation,
+	buildDraftMutation,
+	buildMergeMutation,
+} from "./pull-actions";
 import { buildPullStatusQuery, parsePullStatuses, pullKey, type PullRef, type PullStatus } from "./pull-status";
 import { GitHubApi } from "./api";
 import type {
@@ -59,6 +65,14 @@ export async function setPullAutoMerge(ref: PullRef, nodeId: string, enable: boo
  */
 export async function setPullDraft(ref: PullRef, nodeId: string, draft: boolean): Promise<void> {
 	await api.graphql(buildDraftMutation(nodeId, draft), getToken(ref.org), true);
+	pullStatusCache.delete(pullKey(ref));
+}
+
+/**
+ * Close the pull request without merging it.
+ */
+export async function closePullRequest(ref: PullRef, nodeId: string): Promise<void> {
+	await api.graphql(buildCloseMutation(nodeId), getToken(ref.org), true);
 	pullStatusCache.delete(pullKey(ref));
 }
 

@@ -10,6 +10,7 @@ import {
 	type WorkspaceLeaf,
 } from "obsidian";
 import {
+	closePullRequest,
 	getPullDetail,
 	postPullComment,
 	setPullAutoMerge,
@@ -380,6 +381,20 @@ export class PullRequestView extends ItemView {
 		if (getDraftAction(pull) === "draft") {
 			const toDraft = this.action(actions, "lucide-git-pull-request-draft", "Convert to draft", () =>
 				this.setDraft(toDraft, pull, true),
+			);
+		}
+		if (pull.state === "open" && pull.canUpdate) {
+			const close = this.action(actions, "lucide-circle-x", "Close this PR without merging", () =>
+				new ConfirmModal(
+					this.app,
+					`Close #${pull.ref.number} "${pull.title}" without merging? It can be reopened on GitHub.`,
+					"Close pull request",
+					() =>
+						void this.runAction(close, "Close pull request", async () => {
+							await closePullRequest(pull.ref, pull.nodeId);
+							return `Closed #${pull.ref.number}`;
+						}),
+				).open(),
 			);
 		}
 		if (pull.state === "open") {

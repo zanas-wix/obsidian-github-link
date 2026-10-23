@@ -43,3 +43,10 @@ export function buildCommentMutation(nodeId: string, body: string): string {
 	}
 	return `mutation { addComment(input: { subjectId: "${validNodeId(nodeId)}", body: ${JSON.stringify(body)} }) { commentEdge { node { id } } } }`;
 }
+
+/**
+ * Close without merging. The pull request can be reopened on GitHub.
+ */
+export function buildCloseMutation(nodeId: string): string {
+	return `mutation { closePullRequest(input: { pullRequestId: "${validNodeId(nodeId)}" }) { pullRequest { id } } }`;
+}
