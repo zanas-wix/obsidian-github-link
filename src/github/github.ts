@@ -45,12 +45,12 @@ export async function getPullDetail(ref: PullRef): Promise<PullDetail> {
  * Squash and merge. The cached review/CI status of the PR is dropped, so lists show its new state.
  */
 export async function squashMergePullRequest(ref: PullRef, nodeId: string): Promise<void> {
-	await api.graphql(buildMergeMutation(nodeId), getToken(ref.org));
+	await api.graphql(buildMergeMutation(nodeId), getToken(ref.org), true);
 	pullStatusCache.delete(pullKey(ref));
 }
 
 export async function setPullAutoMerge(ref: PullRef, nodeId: string, enable: boolean): Promise<void> {
-	await api.graphql(buildAutoMergeMutation(nodeId, enable), getToken(ref.org));
+	await api.graphql(buildAutoMergeMutation(nodeId, enable), getToken(ref.org), true);
 	pullStatusCache.delete(pullKey(ref));
 }
 
@@ -58,7 +58,7 @@ export async function setPullAutoMerge(ref: PullRef, nodeId: string, enable: boo
  * `draft: true` converts to a draft, `false` marks the pull request ready for review.
  */
 export async function setPullDraft(ref: PullRef, nodeId: string, draft: boolean): Promise<void> {
-	await api.graphql(buildDraftMutation(nodeId, draft), getToken(ref.org));
+	await api.graphql(buildDraftMutation(nodeId, draft), getToken(ref.org), true);
 	pullStatusCache.delete(pullKey(ref));
 }
 
@@ -67,7 +67,7 @@ export async function setPullDraft(ref: PullRef, nodeId: string, draft: boolean)
  * status of the PR is dropped.
  */
 export async function postPullComment(ref: PullRef, nodeId: string, body: string): Promise<void> {
-	await api.graphql(buildCommentMutation(nodeId, body), getToken(ref.org));
+	await api.graphql(buildCommentMutation(nodeId, body), getToken(ref.org), true);
 	pullStatusCache.delete(pullKey(ref));
 }
 

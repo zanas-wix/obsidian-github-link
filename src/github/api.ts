@@ -21,6 +21,7 @@ import type {
 	PullResponse,
 } from "./response";
 import type { CacheEntry } from "./cache";
+import { unwrapGraphql, type GraphqlResponse } from "./graphql";
 
 type RequestConfig = RequestUrlParam & { headers: Record<string, string> };
 
@@ -191,7 +192,7 @@ export class GitHubApi {
 	/**
 	 * Run a GraphQL query. Not cached: the request cache is keyed by URL, which is the same for every query.
 	 */
-	public graphql<T>(query: string, token?: string): Promise<T> {
+	public graphql<T>(query: string, token?: string, strict = false): Promise<T> {
 		const { resolve, reject, promise } = promiseWithResolvers<T>();
 		GitHubApi.q.push(async () => {
 			try {
@@ -208,12 +209,7 @@ export class GitHubApi {
 					headers: { Authorization: `Bearer ${_token}`, "Content-Type": "application/json" },
 					body: JSON.stringify({ query }),
 				});
-				const json = response.json as { data?: T; errors?: { message: string }[] };
-				// Partial data is fine (e.g. one PR in a repo we cannot see); no data at all is a failure
-				if (!json.data) {
-					throw new Error(json.errors?.map((e) => e.message).join("; ") ?? "Empty GraphQL response");
-				}
-				resolve(json.data);
+				resolve(unwrapGraphql(response.json as GraphqlResponse<T>, strict));
 			} catch (err) {
 				reject(err);
 			}
