@@ -493,7 +493,22 @@ export class PullRequestView extends ItemView {
 			for (const preview of report.previews) {
 				if (preview.pkg !== pkg) {
 					pkg = preview.pkg;
-					body.createDiv({ cls: "github-link-pr-preview-package", text: preview.pkg });
+					const heading = body.createDiv({ cls: "github-link-pr-preview-package" });
+					heading.createSpan({ text: preview.pkg });
+					// The package's first link stands for all of them: they share one override parameter.
+					// metaSiteId and editorSessionId belong to one test site and editor session, so they are left out.
+					const params = queryParams(preview.url, ["metaSiteId", "editorSessionId"]);
+					if (params) {
+						heading.createSpan({ cls: "github-link-pr-preview-separator", text: "/" });
+						const paramsEl = heading.createSpan({
+							cls: "github-link-pr-preview-params",
+							text: `?${params}`,
+							attr: { "aria-label": "Click to copy the query parameters", title: params },
+						});
+						paramsEl.addEventListener("click", () =>
+							this.copy(params, `Copied: ${params.length > 140 ? `${params.slice(0, 140)}…` : params}`, 6000),
+						);
+					}
 				}
 				const row = body.createDiv({ cls: "github-link-pr-preview" });
 				row.createEl("a", {
@@ -504,13 +519,6 @@ export class PullRequestView extends ItemView {
 				});
 				row.createSpan({ cls: "github-link-pr-preview-type", text: preview.type });
 				this.action(row, "lucide-copy", "Copy link", () => this.copy(preview.url, "Copied link"));
-				// These belong to one test site and editor session, so they stay out of what gets copied
-				const params = queryParams(preview.url, ["metaSiteId", "editorSessionId"]);
-				if (params) {
-					this.action(row, "lucide-code", "Copy query parameters only (without metaSiteId and editorSessionId)", () =>
-						this.copy(params, `Copied: ${params.length > 140 ? `${params.slice(0, 140)}…` : params}`, 6000),
-					);
-				}
 			}
 		}
 	}

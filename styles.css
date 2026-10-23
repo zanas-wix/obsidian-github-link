@@ -1094,9 +1094,32 @@ a.github-link-pr-file:hover {
 	font-size: var(--font-ui-smaller);
 }
 .github-link-pr-preview-package {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
 	margin-top: 4px;
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+.github-link-pr-preview-package > :first-child {
+	flex: 0 0 auto;
+}
+.github-link-pr-preview-separator {
+	color: var(--text-faint);
+}
+/* Clicking the parameters copies them */
+.github-link-pr-preview-params {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-monospace);
+	cursor: copy;
+	border-radius: var(--radius-s);
+}
+.github-link-pr-preview-params:hover {
+	color: var(--text-normal);
+	background-color: var(--background-modifier-hover);
 }
 .github-link-pr-preview {
 	display: flex;
