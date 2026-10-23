@@ -1114,6 +1114,8 @@ a.github-link-pr-file:hover {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-family: var(--font-monospace);
+	/* Small on purpose: these are long and only need copying, rarely reading. Raise it here if too hard to read. */
+	font-size: 8px;
 	cursor: copy;
 	border-radius: var(--radius-s);
 }
