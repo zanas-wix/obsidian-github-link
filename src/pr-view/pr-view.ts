@@ -25,6 +25,7 @@ import { pullWatcher } from "../watch/watcher";
 import { pullStateChannel } from "../query/pull-state";
 import { bindCountdown, formatCountdown } from "./countdown";
 import { getDraftAction, getMergeAction } from "./merge-action";
+import { formatForLlm } from "./llm-copy";
 import { QUICK_COMMENTS } from "./quick-comments";
 import { getReadiness, type Tone } from "./readiness";
 import { setPaneSelection } from "./selection";
@@ -753,11 +754,13 @@ export class PullRequestView extends ItemView {
 			body.createDiv({ cls: "github-link-pr-empty", text: "Nothing here." });
 		}
 		for (const item of items) {
-			this.renderTimelineItem(body, item);
+			this.renderTimelineItem(body, item, pull);
 		}
 	}
 
-	private renderTimelineItem(parent: HTMLElement, item: TimelineItem): void {
+	private renderTimelineItem(parent: HTMLElement, item: TimelineItem, pull: PullDetail): void {
+		// Clicking any comment copies the whole item (a review thread as one piece) as text for an LLM
+		const copyText = formatForLlm(pull, item);
 		if (item.kind === "thread") {
 			const details = parent.createEl("details", { cls: "github-link-pr-thread" });
 			// Resolved threads stay out of the way
@@ -772,7 +775,7 @@ export class PullRequestView extends ItemView {
 			if (item.resolved) summary.createSpan({ cls: "github-link-pr-badge", text: "resolved" });
 			this.diffHunk(details, item.diffHunk);
 			for (const comment of item.comments) {
-				this.renderComment(details, comment);
+				this.renderComment(details, comment, undefined, copyText);
 			}
 			return;
 		}
@@ -781,14 +784,29 @@ export class PullRequestView extends ItemView {
 		if (item.kind === "review") {
 			const [tone, label] = REVIEW_ICON[item.state];
 			wrapper.dataset.tone = tone;
-			this.renderComment(wrapper, item, label);
+			this.renderComment(wrapper, item, label, copyText);
 		} else {
-			this.renderComment(wrapper, item);
+			this.renderComment(wrapper, item, undefined, copyText);
 		}
 	}
 
-	private renderComment(parent: HTMLElement, comment: TimelineComment, tag?: string): void {
-		const box = parent.createDiv({ cls: "github-link-pr-comment" });
+	private renderComment(
+		parent: HTMLElement,
+		comment: TimelineComment,
+		tag: string | undefined,
+		copyText: string,
+	): void {
+		const box = parent.createDiv({
+			cls: "github-link-pr-comment is-copyable",
+			attr: { "aria-label": "Click to copy for an LLM" },
+		});
+		box.addEventListener("click", (event) => {
+			// Leave links, code blocks and text selection alone, so reading and copying by hand still work
+			if ((event.target as HTMLElement).closest("a, button, pre, code") || window.getSelection()?.toString()) {
+				return;
+			}
+			this.copy(copyText, "Copied for an LLM");
+		});
 		const head = box.createDiv({ cls: "github-link-pr-comment-head" });
 		this.person(head, comment.author.login, comment.author.avatarUrl);
 		if (tag) head.createSpan({ cls: "github-link-pr-badge", text: tag });
