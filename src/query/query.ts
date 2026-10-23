@@ -17,6 +17,7 @@ import { getPaneSelection, onPaneSelection, setPaneSelection } from "../pr-view/
 import { pullWatcher } from "../watch/watcher";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
 import { applyPullState, pullStateChannel, type PullState } from "./pull-state";
+import { setCopyTarget } from "./copy-link";
 import { expandOrQuery } from "./or-query";
 import { resolveRelativeDates } from "./relative-date";
 import { groupIntoStacks, rowStackPositions, type PullBranches } from "./stack";
@@ -81,6 +82,8 @@ export class GithubQuery {
 			}
 			// The pane and every query block follow this selection, ours included
 			setPaneSelection(pullKey({ org, repo, number: row.number }));
+			// Cmd/Ctrl+C now copies the link of the selected PR (which may change if the pane navigates a stack)
+			setCopyTarget(this.hostElement, () => this.rowsByKey.get(getPaneSelection() ?? "")?.html_url ?? null);
 
 			const stack = rowStackPositions.get(row);
 			const start = stack ? rows.indexOf(row) - (stack.position - 1) : -1;
