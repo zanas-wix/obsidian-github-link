@@ -722,6 +722,12 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+.github-link-pr-branch {
+	cursor: pointer;
+}
+.github-link-pr-branch:hover {
+	background-color: var(--background-modifier-hover);
+}
 .github-link-pr-actions {
 	margin-inline-start: -4px;
 }

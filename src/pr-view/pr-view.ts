@@ -262,9 +262,17 @@ export class PullRequestView extends ItemView {
 		meta.createSpan({ text: `updated ${relativeTime(pull.updatedAt)}`, attr: { title: pull.updatedAt } });
 
 		const branches = header.createDiv({ cls: "github-link-pr-branches" });
-		branches.createEl("code", { text: pull.headRef });
-		setIcon(branches.createSpan(), "lucide-arrow-right");
-		branches.createEl("code", { text: pull.baseRef });
+		for (const [i, branch] of [pull.headRef, pull.baseRef].entries()) {
+			if (i === 1) {
+				setIcon(branches.createSpan(), "lucide-arrow-right");
+			}
+			const code = branches.createEl("code", {
+				cls: "github-link-pr-branch",
+				text: branch,
+				attr: { "aria-label": "Click to copy the branch name", title: branch },
+			});
+			code.addEventListener("click", () => this.copy(branch, `Copied ${branch}`));
+		}
 
 		if (pull.labels.length > 0) {
 			const labels = header.createDiv({ cls: "github-link-pr-labels" });
