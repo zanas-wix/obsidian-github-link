@@ -700,6 +700,12 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
+.github-link-pr-ref {
+	cursor: pointer;
+}
+.github-link-pr-ref:hover {
+	color: var(--text-normal);
+}
 .github-link-pr-title {
 	font-size: var(--font-ui-large);
 	font-weight: var(--font-semibold);

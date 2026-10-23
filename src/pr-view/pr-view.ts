@@ -245,7 +245,13 @@ export class PullRequestView extends ItemView {
 			cls: "github-link-pr-state",
 			text: pull.state === "open" ? (pull.draft ? "Draft" : "Open") : pull.state === "merged" ? "Merged" : "Closed",
 		});
-		top.createSpan({ cls: "github-link-pr-ref", text: `${pull.ref.org}/${pull.ref.repo}#${pull.ref.number}` });
+		const reference = `${pull.ref.org}/${pull.ref.repo}#${pull.ref.number}`;
+		const ref = top.createSpan({
+			cls: "github-link-pr-ref",
+			text: reference,
+			attr: { "aria-label": "Click to copy" },
+		});
+		ref.addEventListener("click", () => this.copy(reference, `Copied ${reference}`));
 
 		header.createEl("a", {
 			cls: "github-link-pr-title",
