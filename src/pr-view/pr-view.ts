@@ -518,7 +518,6 @@ export class PullRequestView extends ItemView {
 					attr: { target: "_blank", title: preview.url },
 				});
 				row.createSpan({ cls: "github-link-pr-preview-type", text: preview.type });
-				this.action(row, "lucide-copy", "Copy link", () => this.copy(preview.url, "Copied link"));
 			}
 		}
 	}
