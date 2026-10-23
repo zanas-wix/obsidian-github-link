@@ -1027,3 +1027,16 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
 .github-link-pr-actions .clickable-icon.is-active {
 	color: var(--interactive-accent);
 }
+
+/* Live "next poll" line */
+.github-link-pr-poll {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.github-link-table-poll {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}

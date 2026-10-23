@@ -12,6 +12,7 @@ import { pullKey, rowPullStatuses, STATUS_COLUMNS, type PullRef } from "../githu
 import { getSearchResultPRStatus, type MaybePaginated, type PaginationMeta } from "../github/response";
 import { openPullRequestPane, PluginSettings } from "../plugin";
 import { getProp, isEqual, relativeTime, titleCase } from "../util";
+import { bindCountdown, formatCountdown } from "../pr-view/countdown";
 import { getPaneSelection, onPaneSelection, setPaneSelection } from "../pr-view/selection";
 import { pullWatcher } from "../watch/watcher";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
@@ -106,6 +107,8 @@ export class GithubQuery {
 	/** Review/merge/CI cells of each card, so polling can redraw them in place */
 	private readonly statusCells = new Map<TableResult[number], [string, HTMLElement][]>();
 	private pollTimer: number | null = null;
+	/** When the next `statusRefresh` poll is due, for the countdown in the footer */
+	private nextPollAt: number | null = null;
 	private pollFailures = 0;
 	/** Stacks the user collapsed, by the URL of their bottom PR; kept across re-renders */
 	private readonly collapsedStacks = new Set<string>();
@@ -305,8 +308,10 @@ export class GithubQuery {
 		}
 		const intervalMs = Math.max(seconds, MIN_STATUS_REFRESH_SECONDS) * 1000;
 		const delay = Math.min(intervalMs * 2 ** this.pollFailures, MAX_STATUS_POLL_DELAY_MS);
+		this.nextPollAt = Date.now() + delay;
 		this.pollTimer = window.setTimeout(() => {
 			this.pollTimer = null;
+			this.nextPollAt = null;
 			void this.pollStatuses(intervalMs);
 		}, delay);
 	}
@@ -759,6 +764,7 @@ export class GithubQuery {
 		}
 
 		this.renderPagination(meta, footer);
+		this.renderPollInfo(footer);
 
 		if (PluginSettings.showRefresh) {
 			const refreshButton = footer.createEl("button", {
@@ -770,6 +776,28 @@ export class GithubQuery {
 			});
 			setIcon(refreshButton, "refresh-cw");
 		}
+	}
+
+	/**
+	 * When the automatic checks of this block are next due: the status poll (`statusRefresh`) and the
+	 * notification watcher (`notify`). Ticks every second without redrawing the list.
+	 */
+	private renderPollInfo(parent: HTMLElement): void {
+		if (!this.params.statusRefresh && !this.params.notify) {
+			return;
+		}
+		const info = parent.createSpan({ cls: "github-link-table-poll" });
+		bindCountdown(info, () => {
+			const parts: string[] = [];
+			if (this.params.statusRefresh && this.nextPollAt !== null) {
+				parts.push(`status poll in ${formatCountdown(this.nextPollAt - Date.now())}`);
+			}
+			const next = pullWatcher.nextCheckAt();
+			if (this.params.notify && next !== null) {
+				parts.push(`notification check in ${formatCountdown(next - Date.now())}`);
+			}
+			return parts.join(" · ");
+		});
 	}
 
 	private renderPagination(meta: PaginationMeta | null, parent: HTMLElement): void {

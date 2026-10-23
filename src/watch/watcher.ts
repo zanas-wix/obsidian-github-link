@@ -1,4 +1,12 @@
-import { isReadyToMerge, mergeBlockers, pullKey, type PullRef, type PullStatus } from "../github/pull-status";
+import {
+	isReadyToMerge,
+	mergeBlockers,
+	POLL_DELAY_MS,
+	pollDelayMs,
+	pullKey,
+	type PullRef,
+	type PullStatus,
+} from "../github/pull-status";
 
 /**
  * A pull request to be told about: set by the user (the bell), or added automatically because a
@@ -30,10 +38,12 @@ export interface WatcherDeps {
 	log: (message: string, error?: unknown) => void;
 }
 
-/** After a failed check the watcher skips this many ticks, doubling each time, so a bad token or an outage is not hammered */
-const MAX_SKIP_TICKS = 16;
-/** Statuses another poll fetched this recently are reused */
-const STATUS_MAX_AGE_MS = 30 * 1000;
+/** After a failed check the wait doubles each time, up to this, so a bad token or an outage is not hammered */
+const MAX_BACKOFF_MS = 10 * 60 * 1000;
+/** A PR newly added by a query block is checked this soon */
+const KICK_DELAY_MS = 3000;
+/** Statuses another poll fetched this recently are reused; shorter than the fastest poll, or it would defeat it */
+const STATUS_MAX_AGE_MS = POLL_DELAY_MS.active - 5000;
 /** Muted pull requests are remembered up to this many, oldest forgotten first */
 const MAX_MUTED = 500;
 
@@ -53,14 +63,40 @@ export class PullWatcher {
 	private listeners = new Set<() => void>();
 	private ticking = false;
 	private failures = 0;
-	private skip = 0;
+	private started = false;
+	private timer: ReturnType<typeof setTimeout> | null = null;
+	private nextAt: number | null = null;
+	private lastAt: number | null = null;
 
 	init(deps: WatcherDeps, watched: WatchedPull[], muted: string[]): void {
 		this.deps = deps;
 		this.watched = new Map(watched.map((pull) => [pullKey(pull.ref), pull]));
 		this.muted = new Set(muted);
 		this.failures = 0;
-		this.skip = 0;
+	}
+
+	/**
+	 * Begin checking by itself. How soon the next check comes depends on what the watched pull requests
+	 * are doing (see `pollTier`), so there is no fixed interval.
+	 */
+	start(): void {
+		this.started = true;
+		this.schedule(KICK_DELAY_MS);
+	}
+
+	stop(): void {
+		this.started = false;
+		this.schedule(null);
+	}
+
+	/** When the next check is due (ms timestamp), or null when nothing is scheduled */
+	nextCheckAt(): number | null {
+		return this.nextAt;
+	}
+
+	/** When the last check finished (ms timestamp), or null if none yet */
+	lastCheckAt(): number | null {
+		return this.lastAt;
 	}
 
 	has(ref: PullRef): boolean {
@@ -101,6 +137,10 @@ export class PullWatcher {
 		}
 		if (added) {
 			this.changed();
+			// Check what the list just added soon, unless a check is already due sooner
+			if (this.started && (this.nextAt === null || this.nextAt - Date.now() > KICK_DELAY_MS)) {
+				this.schedule(KICK_DELAY_MS);
+			}
 		}
 	}
 
@@ -131,15 +171,16 @@ export class PullWatcher {
 	 */
 	async tick(): Promise<void> {
 		const deps = this.deps;
-		if (!deps || this.watched.size === 0 || this.ticking) {
+		if (!deps || this.ticking) {
 			return;
 		}
-		if (this.skip > 0) {
-			this.skip--;
+		if (this.watched.size === 0) {
+			this.schedule(null);
 			return;
 		}
 
 		this.ticking = true;
+		let delay: number = POLL_DELAY_MS.waiting;
 		try {
 			const watched = this.list();
 			const statuses = await deps.fetchStatuses(
@@ -147,6 +188,7 @@ export class PullWatcher {
 				STATUS_MAX_AGE_MS,
 			);
 			this.failures = 0;
+			delay = pollDelayMs([...statuses.values()].filter((status) => status.state === "open"));
 
 			let ended = false;
 			let remembered = false;
@@ -171,10 +213,12 @@ export class PullWatcher {
 			}
 		} catch (error) {
 			this.failures++;
-			this.skip = Math.min(2 ** (this.failures - 1), MAX_SKIP_TICKS);
+			delay = Math.min(POLL_DELAY_MS.active * 2 ** this.failures, MAX_BACKOFF_MS);
 			deps.log("could not check watched pull requests", error);
 		} finally {
 			this.ticking = false;
+			this.lastAt = Date.now();
+			this.schedule(this.started && this.watched.size > 0 ? delay : null);
 		}
 	}
 
@@ -206,6 +250,19 @@ export class PullWatcher {
 		}
 		pull.seen = next;
 		return true;
+	}
+
+	/** Replace the pending check with one in `delayMs`, or cancel it with null */
+	private schedule(delayMs: number | null): void {
+		if (this.timer !== null) {
+			clearTimeout(this.timer);
+		}
+		this.timer = null;
+		this.nextAt = null;
+		if (delayMs !== null && this.started && this.watched.size > 0) {
+			this.nextAt = Date.now() + delayMs;
+			this.timer = setTimeout(() => void this.tick(), delayMs);
+		}
 	}
 
 	private changed(): void {

@@ -17,21 +17,19 @@ import {
 	squashMergePullRequest,
 } from "../github/github";
 import type { CheckState, PullDetail, ReviewState, TimelineComment, TimelineItem } from "../github/pull-detail";
-import { pullKey, type PullRef } from "../github/pull-status";
+import { POLL_DELAY_MS, pollDelayMs, pullKey, type PullRef, type PullStatus } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
 import { setPRIcon } from "../icon";
 import { relativeTime } from "../util";
 import { pullWatcher } from "../watch/watcher";
 import { pullStateChannel } from "../query/pull-state";
+import { bindCountdown, formatCountdown } from "./countdown";
 import { getDraftAction, getMergeAction } from "./merge-action";
 import { QUICK_COMMENTS } from "./quick-comments";
 import { getReadiness, type Tone } from "./readiness";
 import { setPaneSelection } from "./selection";
 
 export const PULL_VIEW_TYPE = "github-link-pull-request";
-
-/** How often a visible pane quietly re-checks its pull request */
-const AUTO_REFRESH_MS = 60 * 1000;
 
 /** One pull request of a stack, for the pane's stack navigator */
 export interface PaneSibling {
@@ -68,6 +66,23 @@ const CHECK_TONE: Record<CheckState, Tone> = {
 	neutral: "neutral",
 };
 
+/** The parts of a PR's detail that decide how often it needs checking */
+function toPollInput(pull: PullDetail): Pick<PullStatus, "draft" | "merge" | "review" | "ci"> {
+	const state = pull.checks.some((check) => check.state === "pending")
+		? "pending"
+		: pull.checks.some((check) => check.state === "failure")
+			? "failure"
+			: pull.checks.length > 0
+				? "success"
+				: null;
+	return {
+		draft: pull.draft,
+		merge: pull.mergeable,
+		review: pull.review,
+		ci: { state, passed: 0, total: pull.checks.length },
+	};
+}
+
 function pullUrl(ref: PullRef): string {
 	return `https://github.com/${ref.org}/${ref.repo}/pull/${ref.number}`;
 }
@@ -88,6 +103,10 @@ export class PullRequestView extends ItemView {
 	private onlyUnresolved = false;
 	/** Guards against a slow response replacing a newer one */
 	private loadId = 0;
+	private refreshTimer: number | null = null;
+	private nextRefreshAt: number | null = null;
+	private lastRefreshAt: number | null = null;
+	private refreshing = false;
 
 	constructor(leaf: WorkspaceLeaf) {
 		super(leaf);
@@ -107,13 +126,7 @@ export class PullRequestView extends ItemView {
 
 	onOpen(): Promise<void> {
 		this.contentEl.addClass("github-link-pr");
-		this.registerInterval(
-			window.setInterval(() => {
-				if (this.target && this.containerEl.isShown() && !document.hidden) {
-					void this.refresh(true);
-				}
-			}, AUTO_REFRESH_MS),
-		);
+		this.register(() => this.clearRefreshTimer());
 		// A watch also ends by itself (notified, merged, closed), which changes the bell
 		this.register(
 			pullWatcher.subscribe(() => {
@@ -158,6 +171,7 @@ export class PullRequestView extends ItemView {
 			return;
 		}
 		const id = ++this.loadId;
+		this.refreshing = true;
 		if (!silent) {
 			this.contentEl.addClass("is-loading");
 		}
@@ -183,8 +197,69 @@ export class PullRequestView extends ItemView {
 		} finally {
 			if (id === this.loadId) {
 				this.contentEl.removeClass("is-loading");
+				this.refreshing = false;
+				this.lastRefreshAt = Date.now();
+				this.scheduleRefresh();
 			}
 		}
+	}
+
+	private clearRefreshTimer(): void {
+		if (this.refreshTimer !== null) {
+			window.clearTimeout(this.refreshTimer);
+		}
+		this.refreshTimer = null;
+		this.nextRefreshAt = null;
+	}
+
+	/**
+	 * Quietly re-check the pull request, as soon as what it is doing calls for (see `pollTier`):
+	 * often while CI runs, rarely while it is stuck, never once it is merged or closed. A hidden pane
+	 * skips the request and looks again at the same pace.
+	 */
+	private scheduleRefresh(): void {
+		this.clearRefreshTimer();
+		const pull = this.detail;
+		if (!this.target || (pull && pull.state !== "open")) {
+			return;
+		}
+		const delay = pull ? pollDelayMs([toPollInput(pull)]) : POLL_DELAY_MS.waiting;
+		this.nextRefreshAt = Date.now() + delay;
+		this.refreshTimer = window.setTimeout(() => {
+			this.refreshTimer = null;
+			if (this.containerEl.isShown() && !document.hidden) {
+				void this.refresh(true);
+			} else {
+				this.scheduleRefresh();
+			}
+		}, delay);
+	}
+
+	/**
+	 * One live line: when the pane last updated and when it will next ask GitHub, plus the notification
+	 * check if this PR is watched. Ticks every second without redrawing the pane.
+	 */
+	private renderPollInfo(parent: HTMLElement, pull: PullDetail): void {
+		const info = parent.createDiv({ cls: "github-link-pr-poll" });
+		bindCountdown(info, () => {
+			if (this.refreshing) {
+				return "Refreshing…";
+			}
+			const parts: string[] = [];
+			if (this.lastRefreshAt !== null) {
+				parts.push(`updated ${formatCountdown(Date.now() - this.lastRefreshAt)} ago`);
+			}
+			parts.push(
+				this.nextRefreshAt !== null
+					? `refresh in ${formatCountdown(this.nextRefreshAt - Date.now())}`
+					: "no auto-refresh",
+			);
+			const next = pullWatcher.nextCheckAt();
+			if (pullWatcher.has(pull.ref) && next !== null) {
+				parts.push(`notification check in ${formatCountdown(next - Date.now())}`);
+			}
+			return parts.join(" · ");
+		});
 	}
 
 	private renderError(error: unknown): void {
@@ -321,6 +396,7 @@ export class PullRequestView extends ItemView {
 			).toggleClass("is-active", watching);
 		}
 		this.action(actions, "lucide-refresh-cw", "Refresh", () => void this.refresh(false));
+		this.renderPollInfo(header, pull);
 	}
 
 	/**

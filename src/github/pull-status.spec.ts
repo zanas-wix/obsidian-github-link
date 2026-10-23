@@ -1,5 +1,14 @@
 import { describe, expect, it } from "@jest/globals";
-import { buildPullStatusQuery, isReadyToMerge, parsePullStatuses, pullKey, type PullStatus } from "./pull-status";
+import {
+	buildPullStatusQuery,
+	isReadyToMerge,
+	POLL_DELAY_MS,
+	pollDelayMs,
+	pollTier,
+	parsePullStatuses,
+	pullKey,
+	type PullStatus,
+} from "./pull-status";
 
 const refs = [
 	{ org: "wix-private", repo: "ricos", number: 1 },
@@ -110,5 +119,39 @@ describe("isReadyToMerge", () => {
 		]) {
 			expect(isReadyToMerge({ ...ready, ...blocked } as PullStatus)).toBe(false);
 		}
+	});
+});
+
+describe("poll tiers", () => {
+	const base: PullStatus = {
+		state: "open",
+		draft: false,
+		review: "review-required",
+		merge: "mergeable",
+		ci: { state: "success", passed: 1, total: 1 },
+	};
+
+	it("watches closely while CI runs or the merge state is being computed", () => {
+		expect(pollTier({ ...base, ci: { state: "pending", passed: 0, total: 1 } })).toBe("active");
+		expect(pollTier({ ...base, merge: "unknown" })).toBe("active");
+	});
+
+	it("waits normally for a human, and backs off while the PR is stuck", () => {
+		expect(pollTier(base)).toBe("waiting");
+		expect(pollTier({ ...base, draft: true })).toBe("idle");
+		expect(pollTier({ ...base, review: "changes-requested" })).toBe("idle");
+		expect(pollTier({ ...base, ci: { state: "failure", passed: 0, total: 1 } })).toBe("idle");
+	});
+
+	it("does not poll fast just because mergeable stays unknown on a stuck PR", () => {
+		expect(pollTier({ ...base, merge: "unknown", draft: true })).toBe("idle");
+		expect(pollTier({ ...base, merge: "unknown", ci: { state: "failure", passed: 0, total: 1 } })).toBe("idle");
+	});
+
+	it("is paced by the most urgent PR", () => {
+		const running = { ...base, ci: { state: "pending" as const, passed: 0, total: 1 } };
+		expect(pollDelayMs([{ ...base, draft: true }, running])).toBe(POLL_DELAY_MS.active);
+		expect(pollDelayMs([{ ...base, draft: true }])).toBe(POLL_DELAY_MS.idle);
+		expect(pollDelayMs([])).toBe(POLL_DELAY_MS.waiting);
 	});
 });

@@ -142,6 +142,36 @@ export function isReadyToMerge(status: PullStatus): boolean {
 	return status.state === "open" && mergeBlockers(status).length === 0;
 }
 
+/**
+ * How closely a pull request needs watching:
+ * - active: something is about to change on its own (CI running, merge state being computed)
+ * - waiting: ready for a human, e.g. awaiting review
+ * - idle: stuck until someone acts (draft, failing CI, changes requested)
+ */
+export type PollTier = "active" | "waiting" | "idle";
+
+export const POLL_DELAY_MS: Record<PollTier, number> = { active: 20 * 1000, waiting: 60 * 1000, idle: 3 * 60 * 1000 };
+
+export function pollTier(status: Pick<PullStatus, "draft" | "merge" | "review" | "ci">): PollTier {
+	if (status.ci.state === "pending") {
+		return "active";
+	}
+	const stuck = status.draft || status.ci.state === "failure" || status.review === "changes-requested";
+	// GitHub can leave `mergeable` unknown for a long time on PRs that are stuck anyway
+	if (status.merge === "unknown" && !stuck) {
+		return "active";
+	}
+	return stuck ? "idle" : "waiting";
+}
+
+/**
+ * Wait until the next check of these open pull requests: the shortest of their tiers, so the most
+ * urgent one sets the pace. With nothing to go on, the middle tier.
+ */
+export function pollDelayMs(statuses: Pick<PullStatus, "draft" | "merge" | "review" | "ci">[]): number {
+	return statuses.length === 0 ? POLL_DELAY_MS.waiting : Math.min(...statuses.map((s) => POLL_DELAY_MS[pollTier(s)]));
+}
+
 /** Skipped and neutral checks do not hold a PR back, so they count as passing */
 function isPassing(context: RawContext): boolean {
 	if (context.__typename === "StatusContext") {

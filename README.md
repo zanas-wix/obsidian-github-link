@@ -53,7 +53,7 @@ In cards view, click a pull request card (anywhere except a link or button) to o
 - the conversation: comments, reviews and inline review threads with the code they refer to, resolved threads collapsed, and an "only unresolved" filter
 - changed files with a +/- bar
 
-The bell button watches a PR: you get a desktop notification when its CI turns green, when it is approved (each with what is still outstanding), and when it can be merged, which ends the watch. Watches are saved and checked once a minute in the background. Add `notify: true` to a pull-request query block to watch every open PR it shows by default; the bell then mutes a single PR (and turns it back on). PRs already green or approved when first seen are not announced, only later changes.
+The bell button watches a PR: you get a desktop notification when its CI turns green, when it is approved (each with what is still outstanding), and when it can be merged, which ends the watch. Watches are saved and checked in the background at a pace set by what the PRs are doing: every 20s while CI runs or the merge state is being computed, every minute while waiting on a reviewer, every 3 minutes while stuck (draft, failing CI, changes requested), and doubling after failed requests. The pane and `notify`/`statusRefresh` list footers show live countdowns to the next check. Add `notify: true` to a pull-request query block to watch every open PR it shows by default; the bell then mutes a single PR (and turns it back on). PRs already green or approved when first seen are not announced, only later changes.
 
 Buttons copy the PR as a Markdown link, open it on GitHub, or refresh it. A visible pane re-checks its PR every minute.
 

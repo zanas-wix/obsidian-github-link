@@ -16,9 +16,6 @@ import { getPullStatuses } from "./github/github";
 import { notify } from "./watch/notify";
 import { pullWatcher } from "./watch/watcher";
 
-/** How often watched pull requests are checked */
-const WATCH_INTERVAL_MS = 60 * 1000;
-
 export const PluginSettings: GithubLinkPluginSettings = { ...DEFAULT_SETTINGS };
 export const PluginData: GithubLinkPluginData = { cache: null, settings: PluginSettings, dataVersion: DATA_VERSION };
 export const logger = new Logger();
@@ -128,9 +125,9 @@ export class GithubLinkPlugin extends Plugin {
 			PluginData.watched ?? [],
 			PluginData.muted ?? [],
 		);
-		// Not tied to a note or a visible pane: this is what notifies while Obsidian sits in the background
-		this.registerInterval(window.setInterval(() => void pullWatcher.tick(), WATCH_INTERVAL_MS));
-		window.setTimeout(() => void pullWatcher.tick(), 5000);
+		// Not tied to a note or a visible pane: this is what notifies while Obsidian sits in the background.
+		// It paces itself by what the watched PRs are doing, so there is no fixed interval.
+		pullWatcher.start();
 
 		// Prefetch gh CLI token so the first link preview doesn't pay the subprocess cost
 		if (PluginSettings.useGhCli) {
@@ -139,6 +136,7 @@ export class GithubLinkPlugin extends Plugin {
 	}
 
 	async onunload() {
+		pullWatcher.stop();
 		await this.saveCacheIfUpdated();
 	}
 

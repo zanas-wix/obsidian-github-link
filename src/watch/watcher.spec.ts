@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { pullKey, type PullRef, type PullStatus } from "../github/pull-status";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { POLL_DELAY_MS, pullKey, type PullRef, type PullStatus } from "../github/pull-status";
 import { PullWatcher, type WatchEvent, type WatchedPull } from "./watcher";
 
 const ref = (number: number): PullRef => ({ org: "o", repo: "r", number });
@@ -227,16 +227,65 @@ describe("PullWatcher", () => {
 		expect(fetchStatuses.mock.calls[0][0].map((r) => r.number)).toEqual([1, 2]);
 	});
 
-	it("backs off after a failed check instead of retrying every tick", async () => {
-		watcher.add(pull(1));
-		fetchStatuses.mockRejectedValueOnce(new Error("403"));
+	describe("scheduling", () => {
+		beforeEach(() => {
+			jest.useFakeTimers({ now: 1_000_000 });
+		});
+		afterEach(() => {
+			watcher.stop();
+			jest.useRealTimers();
+		});
 
-		await watcher.tick(); // fails
-		await watcher.tick(); // skipped
-		expect(fetchStatuses).toHaveBeenCalledTimes(1);
+		it("checks about 3s after starting with something to watch, and not at all with nothing", () => {
+			watcher.start();
+			expect(watcher.nextCheckAt()).toBeNull();
 
-		await watcher.tick(); // retries after the skip
-		expect(fetchStatuses).toHaveBeenCalledTimes(2);
+			watcher.add(pull(1));
+			watcher.start();
+			expect(watcher.nextCheckAt()).toBe(1_000_000 + 3000);
+		});
+
+		it("paces itself by what the PRs are doing: fast while CI runs, slow while stuck", async () => {
+			watcher.add(pull(1));
+			watcher.start();
+
+			set(1, status({ review: "review-required", ci: { state: "pending", passed: 0, total: 1 } }));
+			await jest.advanceTimersByTimeAsync(3000);
+			expect(watcher.nextCheckAt()).toBe(1_003_000 + POLL_DELAY_MS.active);
+
+			set(1, status({ review: "review-required", draft: true }));
+			await jest.advanceTimersByTimeAsync(POLL_DELAY_MS.active);
+			expect(watcher.nextCheckAt()).toBe(1_003_000 + POLL_DELAY_MS.active + POLL_DELAY_MS.idle);
+		});
+
+		it("doubles the wait after each failed check, and recovers on success", async () => {
+			watcher.add(pull(1));
+			watcher.start();
+			fetchStatuses.mockRejectedValue(new Error("403"));
+
+			await jest.advanceTimersByTimeAsync(3000);
+			expect(watcher.nextCheckAt()).toBe(1_003_000 + POLL_DELAY_MS.active * 2);
+
+			await jest.advanceTimersByTimeAsync(POLL_DELAY_MS.active * 2);
+			expect(watcher.nextCheckAt()).toBe(1_003_000 + POLL_DELAY_MS.active * 2 + POLL_DELAY_MS.active * 4);
+
+			fetchStatuses.mockImplementation(() => Promise.resolve(statuses));
+			set(1, status({ review: "review-required" }));
+			await jest.advanceTimersByTimeAsync(POLL_DELAY_MS.active * 4);
+			const checkedAt = Date.now();
+			expect(watcher.nextCheckAt()).toBe(checkedAt + POLL_DELAY_MS.waiting);
+			expect(watcher.lastCheckAt()).toBe(checkedAt);
+		});
+
+		it("checks soon after a query block adds PRs, and stops when nothing is left to watch", async () => {
+			watcher.start();
+			watcher.addAuto([pull(1)]);
+			expect(watcher.nextCheckAt()).toBe(1_000_000 + 3000);
+
+			watcher.remove(ref(1));
+			await jest.advanceTimersByTimeAsync(3000);
+			expect(watcher.nextCheckAt()).toBeNull();
+		});
 	});
 
 	it("tells subscribers when a watch is added, removed or ended by the watcher", async () => {
