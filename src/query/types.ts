@@ -117,4 +117,10 @@ export interface QueryParams {
 	 * (minimum 30). Off when not set.
 	 */
 	statusRefresh?: number;
+
+	/**
+	 * Pull requests only: watch every open pull request in the results and send desktop notifications
+	 * (CI green, approved, ready to merge). Individual pull requests can be muted from the side pane.
+	 */
+	notify?: boolean;
 }

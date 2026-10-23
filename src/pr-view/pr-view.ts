@@ -294,10 +294,15 @@ export class PullRequestView extends ItemView {
 		}
 		if (pull.state === "open") {
 			const watching = pullWatcher.has(pull.ref);
+			const muted = pullWatcher.isMuted(pull.ref);
 			this.action(
 				actions,
-				watching ? "lucide-bell-ring" : "lucide-bell",
-				watching ? "Stop notifying me about this PR" : "Notify me when this PR can be merged",
+				watching ? "lucide-bell-ring" : muted ? "lucide-bell-off" : "lucide-bell",
+				watching
+					? "Notifications on for this PR: click to mute it"
+					: muted
+						? "Muted: click to turn notifications back on"
+						: "Notify me when this PR can be merged",
 				() => this.toggleWatch(pull),
 			).toggleClass("is-active", watching);
 		}
@@ -305,17 +310,18 @@ export class PullRequestView extends ItemView {
 	}
 
 	/**
-	 * Start or stop being notified when this pull request can be merged. Starting checks it right away,
-	 * so a PR that is already ready is announced immediately rather than a minute later.
+	 * Switch notifications for this pull request on or off. Switching on checks it right away, so a PR
+	 * that is already ready is announced immediately rather than a minute later. Switching off also keeps
+	 * query blocks with `notify: true` from watching it again.
 	 */
 	private toggleWatch(pull: PullDetail): void {
 		if (pullWatcher.has(pull.ref)) {
 			pullWatcher.remove(pull.ref);
-			new Notice(`No longer watching #${pull.ref.number}`, 2000);
+			new Notice(`Muted #${pull.ref.number}: no more notifications for it`, 3000);
 			return;
 		}
 		pullWatcher.add({ ref: pull.ref, title: pull.title });
-		new Notice(`Watching #${pull.ref.number}: you will be notified when it can be merged`, 4000);
+		new Notice(`Notifications on for #${pull.ref.number}`, 3000);
 		void pullWatcher.tick();
 	}
 

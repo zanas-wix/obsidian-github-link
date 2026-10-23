@@ -1,14 +1,17 @@
 import { isReadyToMerge, mergeBlockers, pullKey, type PullRef, type PullStatus } from "../github/pull-status";
 
 /**
- * Pull requests the user asked to be told about once they can be merged.
+ * A pull request to be told about: set by the user (the bell), or added automatically because a
+ * query block has `notify: true`.
  */
 export interface WatchedPull {
 	ref: PullRef;
 	/** Title when the watch was set, for the notification text */
 	title: string;
-	/** What the last check saw; milestones are changes from this. Unset until the first check. */
-	seen?: { ci: PullStatus["ci"]["state"]; review: PullStatus["review"] };
+	/** Added by a query block rather than by the user */
+	auto?: boolean;
+	/** What the last check saw; announcements are changes from this. Unset until the first check. */
+	seen?: { ci: PullStatus["ci"]["state"]; review: PullStatus["review"]; ready: boolean };
 }
 
 /**
@@ -23,7 +26,7 @@ export interface WatcherDeps {
 	/** Batched status lookup; `maxAgeMs` lets it reuse statuses fetched moments ago */
 	fetchStatuses: (refs: PullRef[], maxAgeMs: number) => Promise<Map<string, PullStatus>>;
 	notify: (pull: WatchedPull, event: WatchEvent) => void;
-	save: (watched: WatchedPull[]) => void | Promise<void>;
+	save: (state: { watched: WatchedPull[]; muted: string[] }) => void | Promise<void>;
 	log: (message: string, error?: unknown) => void;
 }
 
@@ -31,24 +34,31 @@ export interface WatcherDeps {
 const MAX_SKIP_TICKS = 16;
 /** Statuses another poll fetched this recently are reused */
 const STATUS_MAX_AGE_MS = 30 * 1000;
+/** Muted pull requests are remembered up to this many, oldest forgotten first */
+const MAX_MUTED = 500;
 
 /**
- * Polls watched pull requests (one batched request per 25). Notifies when CI turns green, when the
- * PR is approved, and once more when it can be merged, which ends the watch (as does merging or
- * closing it). Milestones are changes seen between checks, so a PR that is already green when the
- * watch starts is not announced as news.
+ * Polls watched pull requests (one batched request per 25) and announces changes: CI turning green,
+ * approval, and becoming mergeable (again, if it stops being mergeable and later is once more).
+ * A watch ends when the pull request is merged or closed, or when the user mutes it.
+ *
+ * Announcements are changes between checks, so what was already true when a watch started is not news.
+ * One exception: a PR the user explicitly watches that is already mergeable is announced straight away.
  */
 export class PullWatcher {
 	private deps: WatcherDeps | null = null;
 	private watched = new Map<string, WatchedPull>();
+	/** Keys the user switched off; query blocks do not watch these again */
+	private muted = new Set<string>();
 	private listeners = new Set<() => void>();
 	private ticking = false;
 	private failures = 0;
 	private skip = 0;
 
-	init(deps: WatcherDeps, initial: WatchedPull[]): void {
+	init(deps: WatcherDeps, watched: WatchedPull[], muted: string[]): void {
 		this.deps = deps;
-		this.watched = new Map(initial.map((pull) => [pullKey(pull.ref), pull]));
+		this.watched = new Map(watched.map((pull) => [pullKey(pull.ref), pull]));
+		this.muted = new Set(muted);
 		this.failures = 0;
 		this.skip = 0;
 	}
@@ -57,19 +67,55 @@ export class PullWatcher {
 		return this.watched.has(pullKey(ref));
 	}
 
+	/** Switched off by the user, so query blocks leave it alone */
+	isMuted(ref: PullRef): boolean {
+		return this.muted.has(pullKey(ref));
+	}
+
 	list(): WatchedPull[] {
 		return [...this.watched.values()];
 	}
 
+	/**
+	 * The user asks to be told about this pull request (also undoes a mute).
+	 */
 	add(pull: WatchedPull): void {
-		this.watched.set(pullKey(pull.ref), pull);
+		const key = pullKey(pull.ref);
+		this.muted.delete(key);
+		this.watched.set(key, { ...this.watched.get(key), ...pull, auto: false });
 		this.changed();
 	}
 
-	remove(ref: PullRef): void {
-		if (this.watched.delete(pullKey(ref))) {
+	/**
+	 * A query block with `notify: true` shows these pull requests: watch the ones not watched yet and
+	 * not muted. Does not announce what is already true about them.
+	 */
+	addAuto(pulls: WatchedPull[]): void {
+		let added = false;
+		for (const pull of pulls) {
+			const key = pullKey(pull.ref);
+			if (!this.watched.has(key) && !this.muted.has(key)) {
+				this.watched.set(key, { ...pull, auto: true });
+				added = true;
+			}
+		}
+		if (added) {
 			this.changed();
 		}
+	}
+
+	/**
+	 * Stop telling the user about this pull request, and keep query blocks from watching it again.
+	 */
+	remove(ref: PullRef): void {
+		const key = pullKey(ref);
+		this.watched.delete(key);
+		this.muted.delete(key);
+		this.muted.add(key);
+		if (this.muted.size > MAX_MUTED) {
+			this.muted.delete(this.muted.values().next().value as string);
+		}
+		this.changed();
 	}
 
 	/**
@@ -102,8 +148,8 @@ export class PullWatcher {
 			);
 			this.failures = 0;
 
-			let finished = false;
-			let seenChanged = false;
+			let ended = false;
+			let remembered = false;
 			for (const pull of watched) {
 				const status = statuses.get(pullKey(pull.ref));
 				// Missing means GitHub did not return it (no access); keep waiting rather than guess
@@ -112,29 +158,16 @@ export class PullWatcher {
 				}
 				if (status.state !== "open") {
 					this.watched.delete(pullKey(pull.ref));
-					finished = true;
-				} else if (isReadyToMerge(status)) {
-					deps.notify(pull, { kind: "ready" });
-					this.watched.delete(pullKey(pull.ref));
-					finished = true;
-				} else {
-					const previous = pull.seen;
-					const ciPassed = previous !== undefined && previous.ci !== "success" && status.ci.state === "success";
-					const approved = previous !== undefined && previous.review !== "approved" && status.review === "approved";
-					if (ciPassed || approved) {
-						deps.notify(pull, { kind: "progress", ciPassed, approved, blockers: mergeBlockers(status) });
-					}
-					if (previous?.ci !== status.ci.state || previous?.review !== status.review) {
-						pull.seen = { ci: status.ci.state, review: status.review };
-						seenChanged = true;
-					}
+					ended = true;
+					continue;
 				}
+				remembered = this.check(pull, status, deps) || remembered;
 			}
-			if (finished) {
+			if (ended) {
 				this.changed();
-			} else if (seenChanged) {
+			} else if (remembered) {
 				// Remember it for the next start, but nothing visible changed
-				void deps.save(this.list());
+				this.save();
 			}
 		} catch (error) {
 			this.failures++;
@@ -145,11 +178,45 @@ export class PullWatcher {
 		}
 	}
 
+	/**
+	 * Announce what changed since the last check of this open pull request. Returns whether what it
+	 * remembers about it changed.
+	 */
+	private check(pull: WatchedPull, status: PullStatus, deps: WatcherDeps): boolean {
+		const previous = pull.seen;
+		const ready = isReadyToMerge(status);
+
+		if (ready) {
+			// First sight of an automatically added PR is a baseline, not news
+			const isNews = previous ? !previous.ready : !pull.auto;
+			if (isNews) {
+				deps.notify(pull, { kind: "ready" });
+			}
+		} else if (previous) {
+			const ciPassed = previous.ci !== "success" && status.ci.state === "success";
+			const approved = previous.review !== "approved" && status.review === "approved";
+			if (ciPassed || approved) {
+				deps.notify(pull, { kind: "progress", ciPassed, approved, blockers: mergeBlockers(status) });
+			}
+		}
+
+		const next = { ci: status.ci.state, review: status.review, ready };
+		if (previous?.ci === next.ci && previous.review === next.review && previous.ready === next.ready) {
+			return false;
+		}
+		pull.seen = next;
+		return true;
+	}
+
 	private changed(): void {
-		void this.deps?.save(this.list());
+		this.save();
 		for (const listener of [...this.listeners]) {
 			listener();
 		}
+	}
+
+	private save(): void {
+		void this.deps?.save({ watched: this.list(), muted: [...this.muted] });
 	}
 }
 

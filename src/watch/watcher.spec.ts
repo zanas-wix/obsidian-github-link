@@ -12,13 +12,15 @@ const status = (overrides: Partial<PullStatus> = {}): PullStatus => ({
 	ci: { state: "success", passed: 1, total: 1 },
 	...overrides,
 });
+const pending = status({ review: "review-required", ci: { state: "pending", passed: 1, total: 3 } });
 
 describe("PullWatcher", () => {
 	let statuses: Map<string, PullStatus>;
 	let fetchStatuses: jest.Mock<(refs: PullRef[], maxAgeMs: number) => Promise<Map<string, PullStatus>>>;
 	let notify: jest.Mock<(pull: WatchedPull, event: WatchEvent) => void>;
-	let save: jest.Mock<(watched: WatchedPull[]) => void>;
+	let save: jest.Mock<(state: { watched: WatchedPull[]; muted: string[] }) => void>;
 	let watcher: PullWatcher;
+	const set = (number: number, value: PullStatus) => statuses.set(pullKey(ref(number)), value);
 
 	beforeEach(() => {
 		statuses = new Map();
@@ -26,31 +28,181 @@ describe("PullWatcher", () => {
 		notify = jest.fn();
 		save = jest.fn();
 		watcher = new PullWatcher();
-		watcher.init({ fetchStatuses, notify, save, log: jest.fn() }, []);
+		watcher.init({ fetchStatuses, notify, save, log: jest.fn() }, [], []);
 	});
 
-	it("notifies once when a watched pull request becomes ready, then stops watching it", async () => {
-		watcher.add(pull(1));
-		statuses.set(pullKey(ref(1)), status({ review: "review-required" }));
+	describe("ready to merge", () => {
+		it("is announced when it becomes true, once, and the watch goes on", async () => {
+			watcher.add(pull(1));
+			set(1, status({ review: "review-required" }));
+			await watcher.tick();
+			expect(notify).not.toHaveBeenCalled();
 
-		await watcher.tick();
-		expect(notify).not.toHaveBeenCalled();
-		expect(watcher.has(ref(1))).toBe(true);
+			set(1, status());
+			await watcher.tick();
+			await watcher.tick();
 
-		statuses.set(pullKey(ref(1)), status());
-		await watcher.tick();
-		await watcher.tick();
-		expect(notify).toHaveBeenCalledTimes(1);
-		expect(notify.mock.calls[0][1]).toEqual({ kind: "ready" });
-		expect(watcher.has(ref(1))).toBe(false);
-		expect(save).toHaveBeenLastCalledWith([]);
+			expect(notify).toHaveBeenCalledTimes(1);
+			expect(notify.mock.calls[0][1]).toEqual({ kind: "ready" });
+			expect(watcher.has(ref(1))).toBe(true);
+		});
+
+		it("is announced again after the PR stops being mergeable and later is once more", async () => {
+			watcher.add(pull(1));
+			set(1, status());
+			await watcher.tick();
+			set(1, status({ ci: { state: "pending", passed: 0, total: 1 } }));
+			await watcher.tick();
+			set(1, status());
+			await watcher.tick();
+
+			expect(notify.mock.calls.map(([, event]) => event.kind)).toEqual(["ready", "ready"]);
+		});
+
+		it("is announced straight away for a PR the user watches that is already mergeable", async () => {
+			watcher.add(pull(1));
+			set(1, status());
+			await watcher.tick();
+			expect(notify).toHaveBeenCalledTimes(1);
+		});
+
+		it("is not announced for what was already true when a query block added the PR", async () => {
+			watcher.addAuto([pull(1)]);
+			set(1, status());
+			await watcher.tick();
+			expect(notify).not.toHaveBeenCalled();
+
+			set(1, status({ ci: { state: "pending", passed: 0, total: 1 } }));
+			await watcher.tick();
+			set(1, status());
+			await watcher.tick();
+			expect(notify).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("milestones", () => {
+		it("does not announce what was already true when the watch started", async () => {
+			watcher.add(pull(1));
+			set(1, status({ review: "approved", ci: { state: "pending", passed: 1, total: 3 } }));
+
+			await watcher.tick();
+
+			expect(notify).not.toHaveBeenCalled();
+			expect(watcher.list()[0].seen).toEqual({ ci: "pending", review: "approved", ready: false });
+		});
+
+		it("announces CI turning green with what is still outstanding, and keeps watching", async () => {
+			watcher.add(pull(1));
+			set(1, pending);
+			await watcher.tick();
+
+			set(1, status({ review: "review-required", ci: { state: "success", passed: 3, total: 3 } }));
+			await watcher.tick();
+
+			expect(notify.mock.calls[0][1]).toEqual({
+				kind: "progress",
+				ciPassed: true,
+				approved: false,
+				blockers: ["review required"],
+			});
+			expect(watcher.has(ref(1))).toBe(true);
+		});
+
+		it("announces both milestones together when they land in the same check", async () => {
+			watcher.add(pull(1));
+			set(1, pending);
+			await watcher.tick();
+
+			set(1, status({ review: "approved", merge: "unknown", ci: { state: "success", passed: 3, total: 3 } }));
+			await watcher.tick();
+
+			expect(notify.mock.calls[0][1]).toEqual({
+				kind: "progress",
+				ciPassed: true,
+				approved: true,
+				blockers: ["conflicts not checked yet"],
+			});
+		});
+
+		it("sends a single ready notification when the last milestone completes the merge", async () => {
+			watcher.add(pull(1));
+			set(1, status({ review: "review-required" }));
+			await watcher.tick();
+
+			set(1, status());
+			await watcher.tick();
+
+			expect(notify).toHaveBeenCalledTimes(1);
+			expect(notify.mock.calls[0][1]).toEqual({ kind: "ready" });
+		});
+
+		it("does not repeat a milestone while the state is unchanged, and only saves when it changed", async () => {
+			watcher.add(pull(1));
+			set(1, pending);
+			await watcher.tick();
+			save.mockClear();
+
+			await watcher.tick();
+			expect(save).not.toHaveBeenCalled();
+
+			set(1, status({ review: "approved", ci: { state: "pending", passed: 1, total: 3 } }));
+			await watcher.tick();
+			await watcher.tick();
+			expect(notify).toHaveBeenCalledTimes(1);
+			expect(save).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("automatic watching and muting", () => {
+		it("watches what a query block shows, once, without announcing anything yet", () => {
+			watcher.addAuto([pull(1), pull(2)]);
+			watcher.addAuto([pull(1)]);
+
+			expect(watcher.list().map((watched) => [watched.ref.number, watched.auto])).toEqual([
+				[1, true],
+				[2, true],
+			]);
+		});
+
+		it("does not watch a muted PR again, and saves the mute", () => {
+			watcher.addAuto([pull(1)]);
+			watcher.remove(ref(1));
+			watcher.addAuto([pull(1)]);
+
+			expect(watcher.has(ref(1))).toBe(false);
+			expect(watcher.isMuted(ref(1))).toBe(true);
+			expect(save).toHaveBeenLastCalledWith({ watched: [], muted: [pullKey(ref(1))] });
+		});
+
+		it("watches a muted PR again when the user turns it back on, as their own watch", () => {
+			watcher.remove(ref(1));
+			watcher.add(pull(1));
+
+			expect(watcher.list()[0].auto).toBe(false);
+			expect(save).toHaveBeenLastCalledWith({ watched: watcher.list(), muted: [] });
+		});
+
+		it("keeps a PR watched that a query block no longer shows, until it is merged or closed", async () => {
+			watcher.addAuto([pull(1)]);
+			set(1, pending);
+			await watcher.tick();
+			expect(watcher.has(ref(1))).toBe(true);
+		});
+
+		it("restores watches and mutes from saved data", () => {
+			watcher.init({ fetchStatuses, notify, save, log: jest.fn() }, [pull(5)], [pullKey(ref(6))]);
+			watcher.addAuto([pull(6)]);
+
+			expect(watcher.has(ref(5))).toBe(true);
+			expect(watcher.has(ref(6))).toBe(false);
+		});
 	});
 
 	it("drops merged and closed pull requests without notifying", async () => {
 		watcher.add(pull(1));
 		watcher.add(pull(2));
-		statuses.set(pullKey(ref(1)), status({ state: "merged" }));
-		statuses.set(pullKey(ref(2)), status({ state: "closed" }));
+		set(1, status({ state: "merged" }));
+		set(2, status({ state: "closed" }));
 
 		await watcher.tick();
 
@@ -92,99 +244,12 @@ describe("PullWatcher", () => {
 		const stop = watcher.subscribe(listener);
 
 		watcher.add(pull(1));
-		statuses.set(pullKey(ref(1)), status());
+		set(1, status({ state: "merged" }));
 		await watcher.tick();
 		expect(listener).toHaveBeenCalledTimes(2);
 
 		stop();
 		watcher.add(pull(2));
 		expect(listener).toHaveBeenCalledTimes(2);
-	});
-
-	it("restores watches from saved data", () => {
-		watcher.init({ fetchStatuses, notify, save, log: jest.fn() }, [pull(5)]);
-		expect(watcher.has(ref(5))).toBe(true);
-	});
-
-	describe("milestones", () => {
-		const pending = status({ review: "review-required", ci: { state: "pending", passed: 1, total: 3 } });
-
-		it("does not announce what was already true when the watch started", async () => {
-			watcher.add(pull(1));
-			statuses.set(pullKey(ref(1)), status({ review: "approved", ci: { state: "pending", passed: 1, total: 3 } }));
-
-			await watcher.tick();
-
-			expect(notify).not.toHaveBeenCalled();
-			expect(watcher.list()[0].seen).toEqual({ ci: "pending", review: "approved" });
-		});
-
-		it("announces CI turning green with what is still outstanding, and keeps watching", async () => {
-			watcher.add(pull(1));
-			statuses.set(pullKey(ref(1)), pending);
-			await watcher.tick();
-
-			statuses.set(
-				pullKey(ref(1)),
-				status({ review: "review-required", ci: { state: "success", passed: 3, total: 3 } }),
-			);
-			await watcher.tick();
-
-			expect(notify).toHaveBeenCalledTimes(1);
-			expect(notify.mock.calls[0][1]).toEqual({
-				kind: "progress",
-				ciPassed: true,
-				approved: false,
-				blockers: ["review required"],
-			});
-			expect(watcher.has(ref(1))).toBe(true);
-		});
-
-		it("announces approval, and both milestones together when they land in the same check", async () => {
-			watcher.add(pull(1));
-			statuses.set(pullKey(ref(1)), pending);
-			await watcher.tick();
-
-			statuses.set(
-				pullKey(ref(1)),
-				status({ review: "approved", merge: "unknown", ci: { state: "success", passed: 3, total: 3 } }),
-			);
-			await watcher.tick();
-
-			expect(notify.mock.calls[0][1]).toEqual({
-				kind: "progress",
-				ciPassed: true,
-				approved: true,
-				blockers: ["conflicts not checked yet"],
-			});
-		});
-
-		it("sends a single ready notification when the last milestone completes the merge", async () => {
-			watcher.add(pull(1));
-			statuses.set(pullKey(ref(1)), status({ review: "review-required" }));
-			await watcher.tick();
-
-			statuses.set(pullKey(ref(1)), status());
-			await watcher.tick();
-
-			expect(notify).toHaveBeenCalledTimes(1);
-			expect(notify.mock.calls[0][1]).toEqual({ kind: "ready" });
-		});
-
-		it("does not repeat a milestone while the state is unchanged, and saves what it saw", async () => {
-			watcher.add(pull(1));
-			statuses.set(pullKey(ref(1)), pending);
-			await watcher.tick();
-			save.mockClear();
-
-			await watcher.tick();
-			expect(save).not.toHaveBeenCalled();
-
-			statuses.set(pullKey(ref(1)), status({ review: "approved", ci: { state: "pending", passed: 1, total: 3 } }));
-			await watcher.tick();
-			await watcher.tick();
-			expect(notify).toHaveBeenCalledTimes(1);
-			expect(save).toHaveBeenCalledTimes(1);
-		});
 	});
 });

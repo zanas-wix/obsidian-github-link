@@ -118,13 +118,15 @@ export class GithubLinkPlugin extends Plugin {
 			{
 				fetchStatuses: (refs, maxAgeMs) => getPullStatuses(refs, maxAgeMs),
 				notify,
-				save: async (watched) => {
+				save: async ({ watched, muted }) => {
 					PluginData.watched = watched;
+					PluginData.muted = muted;
 					await this.saveData(PluginData);
 				},
 				log: (message, error) => logger.warn(`${message}: ${String(error)}`),
 			},
 			PluginData.watched ?? [],
+			PluginData.muted ?? [],
 		);
 		// Not tied to a note or a visible pane: this is what notifies while Obsidian sits in the background
 		this.registerInterval(window.setInterval(() => void pullWatcher.tick(), WATCH_INTERVAL_MS));

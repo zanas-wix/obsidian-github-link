@@ -13,6 +13,7 @@ import { getSearchResultPRStatus, type MaybePaginated, type PaginationMeta } fro
 import { openPullRequestPane, PluginSettings } from "../plugin";
 import { getProp, isEqual, relativeTime, titleCase } from "../util";
 import { getPaneSelection, onPaneSelection, setPaneSelection } from "../pr-view/selection";
+import { pullWatcher } from "../watch/watcher";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
 import { applyPullState, pullStateChannel, type PullState } from "./pull-state";
 import { expandOrQuery } from "./or-query";
@@ -170,6 +171,22 @@ export class GithubQuery {
 		this.resultMeta = meta;
 		this.render();
 		void this.loadStatusesLazily(result);
+		this.watchOpenPullRequests(result);
+	}
+
+	/**
+	 * `notify: true`: watch every open pull request shown. The watcher skips muted ones and does not
+	 * announce what is already true about the rest.
+	 */
+	private watchOpenPullRequests(result: TableResult): void {
+		if (!this.params.notify || this.params.queryType !== QueryType.PullRequest) {
+			return;
+		}
+		const pulls = result.flatMap((row) => {
+			const [org, repo] = this.getRepoFullName(row)?.split("/") ?? [];
+			return org && repo && row.state === "open" ? [{ ref: { org, repo, number: row.number }, title: row.title }] : [];
+		});
+		pullWatcher.addAuto(pulls);
 	}
 
 	/**

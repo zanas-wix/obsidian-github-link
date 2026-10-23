@@ -18,6 +18,8 @@ export interface GithubLinkPluginData {
 	dataVersion: number;
 	/** Pull requests to notify about once they can be merged; absent in data saved by older versions */
 	watched?: WatchedPull[];
+	/** Keys (`org/repo#number`) of pull requests the user switched notifications off for */
+	muted?: string[];
 }
 
 export interface GithubLinkPluginSettings {
