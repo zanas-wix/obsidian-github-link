@@ -475,8 +475,10 @@ export class PullRequestView extends ItemView {
 
 		if (report.failures.length > 0) {
 			const body = this.section(parent, "Validation failures", true, `${report.failures.length}`);
+			// One grid; every row is a subgrid of it, so the columns line up across rows
+			const grid = body.createDiv({ cls: "github-link-pr-failures" });
 			for (const failure of report.failures) {
-				const row = body.createDiv({ cls: "github-link-pr-failure" });
+				const row = grid.createDiv({ cls: "github-link-pr-failure" });
 				row.createSpan({ cls: "github-link-pr-failure-validation", text: failure.validation });
 				row.createSpan({ cls: "github-link-pr-failure-package", text: failure.pkg });
 				if (failure.logUrl) {
@@ -502,10 +504,10 @@ export class PullRequestView extends ItemView {
 				});
 				row.createSpan({ cls: "github-link-pr-preview-type", text: preview.type });
 				this.action(row, "lucide-copy", "Copy link", () => this.copy(preview.url, "Copied link"));
-				// The site id is specific to one test site, so it stays out of what gets copied
-				const params = queryParams(preview.url, ["metaSiteId"]);
+				// These belong to one test site and editor session, so they stay out of what gets copied
+				const params = queryParams(preview.url, ["metaSiteId", "editorSessionId"]);
 				if (params) {
-					this.action(row, "lucide-code", "Copy query parameters only (without metaSiteId)", () =>
+					this.action(row, "lucide-code", "Copy query parameters only (without metaSiteId and editorSessionId)", () =>
 						this.copy(params, `Copied: ${params.length > 140 ? `${params.slice(0, 140)}…` : params}`, 6000),
 					);
 				}

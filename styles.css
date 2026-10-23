@@ -1069,16 +1069,23 @@ a.github-link-pr-file:hover {
 }
 
 /* CI report: validation failures and deploy previews */
+/* Validation, package, log: one grid, each row a subgrid of it, so the columns align */
+.github-link-pr-failures {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	column-gap: 12px;
+	row-gap: 4px;
+}
 .github-link-pr-failure {
-	display: flex;
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: subgrid;
 	align-items: baseline;
-	gap: 8px;
 }
 .github-link-pr-failure-validation {
 	color: var(--gh-color-danger-fg);
 }
 .github-link-pr-failure-package {
-	flex: 1 1 auto;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
