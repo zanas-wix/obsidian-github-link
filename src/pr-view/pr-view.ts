@@ -498,14 +498,13 @@ export class PullRequestView extends ItemView {
 			for (const preview of report.previews) {
 				if (preview.pkg !== pkg) {
 					pkg = preview.pkg;
-					const heading = body.createDiv({ cls: "github-link-pr-preview-package" });
-					heading.createSpan({ text: preview.pkg });
-					// The package's first link stands for all of them: they share one override parameter.
-					// metaSiteId and editorSessionId belong to one test site and editor session, so they are left out.
+					body.createDiv({ cls: "github-link-pr-preview-package", text: preview.pkg });
+					// First item of the group: the package's first link stands for all of them, as they share one
+					// override parameter. metaSiteId and editorSessionId belong to one test site and editor session,
+					// so they are left out.
 					const params = queryParams(preview.url, ["metaSiteId", "editorSessionId"]);
 					if (params) {
-						heading.createSpan({ cls: "github-link-pr-preview-separator", text: "/" });
-						const paramsEl = heading.createSpan({
+						const paramsEl = body.createDiv({
 							cls: "github-link-pr-preview-params",
 							text: `?${params}`,
 							attr: { "aria-label": "Click to copy the query parameters", title: params },
