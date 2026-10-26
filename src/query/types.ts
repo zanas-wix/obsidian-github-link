@@ -1,4 +1,5 @@
 import type { IssueListResponse, IssueSearchResponse, PullListResponse } from "../github/response";
+import type { GroupBy } from "./grouping";
 
 export type TableResult = IssueSearchResponse["items"] | IssueListResponse | PullListResponse;
 
@@ -108,9 +109,10 @@ export interface QueryParams {
 	stack?: boolean;
 
 	/**
-	 * Cards output only: group cards under a heading per repository.
+	 * Cards output only: how cards are grouped to start with. The switch above the list can change it:
+	 * none, repo, status, author, updated or readiness.
 	 */
-	groupBy?: "repo";
+	groupBy?: GroupBy;
 
 	/**
 	 * Pull requests with review/ci/merge columns: re-check their status every this many seconds

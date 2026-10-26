@@ -18,11 +18,15 @@ import { pullWatcher } from "../watch/watcher";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
 import { applyPullState, pullStateChannel, type PullState } from "./pull-state";
 import { setCopyTarget } from "./copy-link";
+import { GROUP_OPTIONS, groupRows, type GroupBy } from "./grouping";
 import { expandOrQuery } from "./or-query";
 import { resolveRelativeDates } from "./relative-date";
 import { groupIntoStacks, rowStackPositions, type PullBranches } from "./stack";
 import type { QueryParams, TableResult } from "./types";
 import { OutputType, QueryType } from "./types";
+
+/** Grouping the user picked with the switch, per block (by its source), so it survives the note being re-rendered */
+const sessionGrouping = new Map<string, GroupBy>();
 
 /** `statusRefresh` below this is raised to it; GitHub throttles bursts of requests */
 const MIN_STATUS_REFRESH_SECONDS = 30;
@@ -32,6 +36,9 @@ const MAX_STATUS_POLL_DELAY_MS = 10 * 60 * 1000;
 const INITIAL_STATUS_MAX_AGE_MS = 10 * 1000;
 
 export class GithubQuery {
+	private source = "";
+	/** Picked with the switch; falls back to the session memory, then to `groupBy` of the block */
+	private grouping: GroupBy | null = null;
 	private statusMaxAgeMs = INITIAL_STATUS_MAX_AGE_MS;
 	/** Cards of this block by pull request key, so they can follow the side pane */
 	private readonly cardsByKey = new Map<string, HTMLElement>();
@@ -150,6 +157,7 @@ export class GithubQuery {
 	}
 
 	public async init(source: string): Promise<void> {
+		this.source = source;
 		const parsedParams = this.parseCodeblock(source);
 		if (!parsedParams) {
 			console.error(`Github Link: simplistic parsing failed`);
@@ -338,7 +346,8 @@ export class GithubQuery {
 	 * Redraw only the status cells; the rest of the list (scroll position, collapsed stacks) is untouched.
 	 */
 	private redrawStatuses(): void {
-		if (this.params.outputType !== OutputType.Cards) {
+		// Groups by status or readiness change as states arrive, so those need the whole list rebuilt
+		if (this.params.outputType !== OutputType.Cards || this.groupingFollowsState()) {
 			this.render();
 			return;
 		}
@@ -363,7 +372,7 @@ export class GithubQuery {
 			return;
 		}
 		if (applyPullState(row, state, draft)) {
-			if (this.params.outputType === OutputType.Cards) {
+			if (this.params.outputType === OutputType.Cards && !this.groupingFollowsState()) {
 				this.redrawStateIcon(key);
 			} else {
 				this.render();
@@ -544,12 +553,25 @@ export class GithubQuery {
 		this.scheduleStatusPoll();
 	}
 
+	private getGrouping(): GroupBy {
+		return this.grouping ?? sessionGrouping.get(this.source) ?? this.params.groupBy ?? "none";
+	}
+
+	/** Groupings whose groups depend on state that can change after the list loaded */
+	private groupingFollowsState(): boolean {
+		return this.getGrouping() === "status" || this.getGrouping() === "readiness";
+	}
+
 	/**
-	 * Compact full-width rows, optionally under one heading per repo (`groupBy: repo`).
-	 * Groups keep the order their first PR appeared in; rows keep their order within a group,
-	 * so a PR stack stays contiguous.
+	 * Compact full-width rows under the grouping chosen with the switch (or `groupBy` of the block).
+	 * Rows keep their order inside a group, so a PR stack stays together.
 	 */
 	private renderCards(parent: HTMLElement, queryType: QueryType, columns: string[], result: TableResult): void {
+		const grouping = this.getGrouping();
+		if (queryType === QueryType.PullRequest) {
+			this.renderGroupSwitch(parent, grouping);
+		}
+
 		// One grid for the whole block: every card (and group, and stack) is a subgrid of it, so the
 		// columns line up across all of them. Tracks: icon, title, one per side cell.
 		const sideColumns = columns.filter((c) => !["title", "status", "stack"].includes(c));
@@ -560,27 +582,46 @@ export class GithubQuery {
 		const root = parent.createDiv({ cls: "github-link-cards-root" });
 		root.style.setProperty("--side-cells", `${sideCells}`);
 
-		if (this.params.groupBy !== "repo") {
-			this.renderCardRows(root.createDiv({ cls: "github-link-cards" }), queryType, columns, [...result]);
-			return;
+		const groups = groupRows([...result], grouping, {
+			repo: (row) => this.getRepoFullName(row),
+			status: (row) => getSearchResultPRStatus(row),
+			author: (row) => row.user?.login ?? null,
+			updatedAt: (row) => row.updated_at,
+			pullStatus: (row) => rowPullStatuses.get(row),
+			now: Date.now(),
+		});
+		for (const group of groups) {
+			if (grouping === "none") {
+				this.renderCardRows(root.createDiv({ cls: "github-link-cards" }), queryType, columns, group.rows);
+				continue;
+			}
+			const section = root.createDiv({ cls: "github-link-cards-group" });
+			const heading = section.createDiv({ cls: "github-link-cards-group-heading" });
+			if (group.href) {
+				heading.createEl("a", { text: group.label, href: group.href, attr: { target: "_blank" } });
+			} else {
+				heading.createSpan({ text: group.label });
+			}
+			heading.createSpan({ cls: "github-link-cards-group-count", text: `${group.rows.length}` });
+			this.renderCardRows(section.createDiv({ cls: "github-link-cards" }), queryType, columns, group.rows);
 		}
+	}
 
-		const groups = new Map<string, TableResult[number][]>();
-		for (const row of result) {
-			const repo = this.getRepoFullName(row) ?? "";
-			groups.set(repo, [...(groups.get(repo) ?? []), row]);
+	/**
+	 * The switch above the list. The choice is remembered for this block until Obsidian restarts.
+	 */
+	private renderGroupSwitch(parent: HTMLElement, grouping: GroupBy): void {
+		const toolbar = parent.createDiv({ cls: "github-link-cards-toolbar" });
+		const select = toolbar.createEl("select", { cls: "dropdown", attr: { "aria-label": "Group pull requests" } });
+		for (const option of GROUP_OPTIONS) {
+			const element = select.createEl("option", { text: option.label, value: option.value });
+			element.selected = option.value === grouping;
 		}
-		for (const [repo, rows] of groups) {
-			const group = root.createDiv({ cls: "github-link-cards-group" });
-			const heading = group.createDiv({ cls: "github-link-cards-group-heading" });
-			heading.createEl("a", {
-				text: repo || "Unknown repository",
-				href: repo ? `https://github.com/${repo}` : "#",
-				attr: { target: "_blank" },
-			});
-			heading.createSpan({ cls: "github-link-cards-group-count", text: `${rows.length}` });
-			this.renderCardRows(group.createDiv({ cls: "github-link-cards" }), queryType, columns, rows);
-		}
+		select.addEventListener("change", () => {
+			this.grouping = select.value as GroupBy;
+			sessionGrouping.set(this.source, this.grouping);
+			this.render();
+		});
 	}
 
 	/**
