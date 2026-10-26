@@ -23,6 +23,7 @@ import { GROUP_OPTIONS, groupNested, isGroupBy, type Group, type GroupBy } from 
 import { parseGroups, type CustomGroup } from "./pr-ref";
 import { expandOrQuery } from "./or-query";
 import { resolveRelativeDates } from "./relative-date";
+import { rowRepoFullName } from "./row-ref";
 import { groupIntoStacks, rowStackPositions, type PullBranches } from "./stack";
 import type { QueryParams, TableResult } from "./types";
 import { OutputType, QueryType } from "./types";
@@ -818,10 +819,7 @@ export class GithubQuery {
 	}
 
 	private getRepoFullName(row: TableResult[number]): string | null {
-		if ("repository_url" in row) {
-			return /\/repos\/([^/]+\/[^/]+)$/.exec(row.repository_url)?.[1] ?? null;
-		}
-		return "base" in row ? row.base.repo.full_name : null;
+		return rowRepoFullName(row);
 	}
 
 	private renderCardField(

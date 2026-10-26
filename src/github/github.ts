@@ -13,6 +13,7 @@ import {
 	buildDraftMutation,
 	buildMergeMutation,
 } from "./pull-actions";
+import type { ChangedFile } from "./file-groups";
 import { buildPullSummaryQuery, parsePullSummaries, type PullSummaries } from "./pull-summary";
 import { buildPullStatusQuery, parsePullStatuses, pullKey, type PullRef, type PullStatus } from "./pull-status";
 import { GitHubApi } from "./api";
@@ -90,6 +91,25 @@ const PULL_STATUS_BATCH_SIZE = 25;
 
 /** Latest status per pull request, shared by every query block so the same PR is never fetched twice at once */
 const pullStatusCache = new Map<string, { status: PullStatus; fetchedAt: number }>();
+
+/** GitHub lists at most 3000 files; more than this many pages is not worth a hover */
+const MAX_FILE_PAGES = 10;
+
+/**
+ * The files a pull request changes with lines added and removed per file, up to 1000 files.
+ * Goes through the request cache, so hovering the same PR again costs nothing within its window.
+ */
+export async function getPullFiles(ref: PullRef): Promise<{ files: ChangedFile[]; truncated: boolean }> {
+	const files: ChangedFile[] = [];
+	for (let page = 1; page <= MAX_FILE_PAGES; page++) {
+		const batch = await api.listPullFiles(ref.org, ref.repo, ref.number, page, getToken(ref.org));
+		files.push(...batch.map((file) => ({ path: file.filename, additions: file.additions, deletions: file.deletions })));
+		if (batch.length < 100) {
+			return { files, truncated: false };
+		}
+	}
+	return { files, truncated: true };
+}
 
 /**
  * Pull requests by reference, as list rows, 25 per request. References GitHub does not return

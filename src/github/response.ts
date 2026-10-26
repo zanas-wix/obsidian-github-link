@@ -40,6 +40,7 @@ export type IssueResponse = RestEndpointMethodTypes["issues"]["get"]["response"]
 export type IssueListResponse = RestEndpointMethodTypes["issues"]["list"]["response"]["data"];
 export type IssueSearchResponse = RestEndpointMethodTypes["search"]["issuesAndPullRequests"]["response"]["data"];
 export type PullResponse = RestEndpointMethodTypes["pulls"]["get"]["response"]["data"];
+export type PullFilesResponse = RestEndpointMethodTypes["pulls"]["listFiles"]["response"]["data"];
 export type PullListResponse = RestEndpointMethodTypes["pulls"]["list"]["response"]["data"];
 export type CodeResponse = RestEndpointMethodTypes["repos"]["getContent"]["response"]["data"];
 export type RepoSearchResponse = RestEndpointMethodTypes["search"]["repos"]["response"]["data"];

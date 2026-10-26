@@ -17,6 +17,7 @@ import type {
 	MaybePaginated,
 	PaginationMeta,
 	PullListParams,
+	PullFilesResponse,
 	PullListResponse,
 	PullResponse,
 } from "./response";
@@ -130,6 +131,22 @@ export class GitHubApi {
 		const url = this.addParams(`${GitHubApi.baseApi}/orgs/${org}/issues`, params as Record<string, unknown>);
 		const { meta, response } = await this.queueRequest({ url }, token, skipCache);
 		return { meta, response: response.json as IssueListResponse };
+	}
+
+	/**
+	 * One page (up to 100) of the files a pull request changes, with lines added and removed per file.
+	 */
+	public async listPullFiles(
+		org: string,
+		repo: string,
+		pr: number,
+		page: number,
+		token?: string,
+		skipCache = false,
+	): Promise<PullFilesResponse> {
+		const url = this.addParams(`${GitHubApi.baseApi}/repos/${org}/${repo}/pulls/${pr}/files`, { per_page: 100, page });
+		const { response } = await this.queueRequest({ url }, token, skipCache);
+		return response.json as PullFilesResponse;
 	}
 
 	public async getPullRequest(

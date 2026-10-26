@@ -1,5 +1,7 @@
 import { setIcon } from "obsidian";
 import { rowPullStatuses, type PullStatus } from "../../github/pull-status";
+import { attachLinesBreakdown } from "../lines-popover";
+import { rowPullRef } from "../row-ref";
 import type { ColumnsMap } from "./base";
 
 type Tone = "success" | "danger" | "attention";
@@ -61,6 +63,11 @@ export const PullStatusColumns: ColumnsMap = {
 				el.createSpan({ cls: "github-link-lines-added", text: `+${status.additions}` });
 				el.createSpan({ text: "/" });
 				el.createSpan({ cls: "github-link-lines-removed", text: `-${status.deletions}` });
+				// Hovering the count shows the breakdown per file type, loaded on the first hover
+				const ref = rowPullRef(row);
+				if (ref) {
+					attachLinesBreakdown(el, ref);
+				}
 			}
 		},
 	},
