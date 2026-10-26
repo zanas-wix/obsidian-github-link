@@ -1149,3 +1149,15 @@ a.github-link-pr-file:hover {
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 }
+
+/* +added/-removed lines */
+.github-link-lines {
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.github-link-lines-added {
+	color: var(--gh-color-success-fg);
+}
+.github-link-lines-removed {
+	color: var(--gh-color-danger-fg);
+}

@@ -24,6 +24,8 @@ const ctx: GroupContext<Row> = {
 };
 const ids = (groups: { label: string; rows: Row[] }[]) => groups.map((g) => [g.label, g.rows.map((r) => r.id)]);
 const pull = (overrides: Partial<PullStatus> = {}): PullStatus => ({
+	additions: 0,
+	deletions: 0,
 	state: "open",
 	draft: false,
 	review: "approved",

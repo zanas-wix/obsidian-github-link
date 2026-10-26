@@ -34,6 +34,8 @@ describe("parsePullStatuses", () => {
 	const data = {
 		p0: {
 			pullRequest: {
+				additions: 1251,
+				deletions: 480,
 				reviewDecision: "APPROVED",
 				mergeable: "MERGEABLE",
 				commits: {
@@ -72,6 +74,8 @@ describe("parsePullStatuses", () => {
 		const statuses = parsePullStatuses(refs, data);
 
 		expect(statuses.get(pullKey(refs[0]))).toEqual({
+			additions: 1251,
+			deletions: 480,
 			state: "open",
 			draft: false,
 			review: "approved",
@@ -79,6 +83,8 @@ describe("parsePullStatuses", () => {
 			ci: { state: "failure", passed: 3, total: 5 },
 		});
 		expect(statuses.get(pullKey(refs[1]))).toEqual({
+			additions: 0,
+			deletions: 0,
 			state: "open",
 			draft: false,
 			review: null,
@@ -94,6 +100,8 @@ describe("parsePullStatuses", () => {
 
 describe("isReadyToMerge", () => {
 	const ready: PullStatus = {
+		additions: 0,
+		deletions: 0,
 		state: "open",
 		draft: false,
 		review: "approved",
@@ -124,6 +132,8 @@ describe("isReadyToMerge", () => {
 
 describe("poll tiers", () => {
 	const base: PullStatus = {
+		additions: 0,
+		deletions: 0,
 		state: "open",
 		draft: false,
 		review: "review-required",

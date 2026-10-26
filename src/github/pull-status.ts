@@ -1,4 +1,5 @@
-export const STATUS_COLUMNS = ["ci", "review", "merge"];
+/** Columns filled from the batched status request (the line counts ride along with CI and review state) */
+export const STATUS_COLUMNS = ["ci", "review", "merge", "lines"];
 
 /**
  * Review, merge and CI state of pull requests. The REST API needs several requests per PR for this
@@ -12,6 +13,8 @@ export interface PullRef {
 }
 
 export interface PullStatus {
+	additions: number;
+	deletions: number;
 	state: "open" | "closed" | "merged";
 	draft: boolean;
 	/** Combined review state; null when no review is required or requested */
@@ -47,6 +50,8 @@ export function buildPullStatusQuery(refs: PullRef[]): string {
 	pullRequest(number: ${ref.number}) {
 		state
 		isDraft
+		additions
+		deletions
 		reviewDecision
 		mergeable
 		commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) {
@@ -66,6 +71,8 @@ interface RawContext {
 }
 
 interface RawPull {
+	additions?: number;
+	deletions?: number;
 	state?: string;
 	isDraft?: boolean;
 	reviewDecision?: string | null;
@@ -103,6 +110,8 @@ function toStatus(pull: RawPull): PullStatus {
 	else if (rollup?.state === "PENDING" || rollup?.state === "EXPECTED") ci = "pending";
 
 	return {
+		additions: pull.additions ?? 0,
+		deletions: pull.deletions ?? 0,
 		state: pull.state === "MERGED" ? "merged" : pull.state === "CLOSED" ? "closed" : "open",
 		draft: Boolean(pull.isDraft),
 		review:

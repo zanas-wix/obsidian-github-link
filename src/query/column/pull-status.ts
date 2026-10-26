@@ -52,6 +52,18 @@ export const PullStatusColumns: ColumnsMap = {
 			}
 		},
 	},
+	lines: {
+		header: "Lines",
+		cell: (row, el) => {
+			const status = rowPullStatuses.get(row);
+			if (status) {
+				el.addClass("github-link-lines");
+				el.createSpan({ cls: "github-link-lines-added", text: `+${status.additions}` });
+				el.createSpan({ text: "/" });
+				el.createSpan({ cls: "github-link-lines-removed", text: `-${status.deletions}` });
+			}
+		},
+	},
 	merge: {
 		header: "Merge",
 		cell: (row, el) => {

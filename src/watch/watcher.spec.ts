@@ -5,6 +5,8 @@ import { PullWatcher, type WatchEvent, type WatchedPull } from "./watcher";
 const ref = (number: number): PullRef => ({ org: "o", repo: "r", number });
 const pull = (number: number): WatchedPull => ({ ref: ref(number), title: `PR ${number}` });
 const status = (overrides: Partial<PullStatus> = {}): PullStatus => ({
+	additions: 0,
+	deletions: 0,
 	state: "open",
 	draft: false,
 	review: "approved",
