@@ -67,10 +67,8 @@ export const PullStatusColumns: ColumnsMap = {
 	merge: {
 		header: "Merge",
 		cell: (row, el) => {
-			const merge = rowPullStatuses.get(row)?.merge;
-			if (merge === "mergeable") {
-				pill(el, "success", "Mergeable");
-			} else if (merge === "conflicting") {
+			// Only the problem is worth a pill; a clean merge is the expected state
+			if (rowPullStatuses.get(row)?.merge === "conflicting") {
 				pill(el, "danger", "Conflicts");
 			}
 		},
