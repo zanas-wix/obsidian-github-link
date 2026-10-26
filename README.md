@@ -57,6 +57,29 @@ The bell button watches a PR: you get a desktop notification when its CI turns g
 
 Buttons copy the PR as a Markdown link, open it on GitHub, or refresh it. A visible pane re-checks its PR every minute.
 
+### Custom groups
+
+List specific pull requests, across repos, under names of your own, e.g. everything for one feature:
+
+````
+```github-query
+outputType: cards
+queryType: pull-request
+columns: [number, title, review, ci, stack]
+stack: true
+groups:
+  - name: Pages v2
+    prs:
+      - wix-private/ricos#10777
+      - wix-private/ricos#10778
+      - https://github.com/wix-private/ricos/pull/10779
+  - name: Blog
+    prs: [wix-private/app-market#61786]
+```
+````
+
+A pull request is `org/repo#123` or its URL. Listed PRs are shown even if the block's `query` does not return them, so a block may have no `query` at all; ones the query returns anyway are not fetched twice. Groups appear in the order written and PRs inside them in the order listed; a stack stays together at its earliest listed member. PRs the query returns that no group lists go under "Other". A PR listed in several groups stays in the first. A reference that is malformed fails the block with a message naming it; one GitHub cannot return (no such PR, or no access) is reported above the list. The grouping dropdown gains "Custom groups", which is the starting grouping when a block defines groups.
+
 See the [documentation](https://github.com/nathonius/obsidian-github-link/wiki) for more info.
 
 ## Updates

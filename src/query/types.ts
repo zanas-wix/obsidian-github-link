@@ -125,4 +125,12 @@ export interface QueryParams {
 	 * (CI green, approved, ready to merge). Individual pull requests can be muted from the side pane.
 	 */
 	notify?: boolean;
+
+	/**
+	 * Pull requests only: named sets of specific pull requests, e.g. everything for one feature across
+	 * repos. Listed PRs are shown even when the query does not return them, so a block may have no
+	 * `query` at all. Cards group by these sets (switch: "Custom groups"). A PR listed twice stays in
+	 * the first group that lists it.
+	 */
+	groups?: { name: string; prs: string[] }[];
 }

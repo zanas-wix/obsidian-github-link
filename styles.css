@@ -1133,3 +1133,9 @@ a.github-link-pr-file:hover {
 .github-link-cards-toolbar select {
 	font-size: var(--font-ui-smaller);
 }
+
+.github-link-cards-missing {
+	margin-bottom: 8px;
+	color: var(--text-error);
+	font-size: var(--font-ui-smaller);
+}

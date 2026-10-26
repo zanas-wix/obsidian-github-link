@@ -7,6 +7,7 @@ import {
 	getPullRequestsForRepo,
 	getIssuesForOrganization,
 	getPullStatuses,
+	getPullSummaries,
 } from "../github/github";
 import { pullKey, rowPullStatuses, STATUS_COLUMNS, type PullRef } from "../github/pull-status";
 import { getSearchResultPRStatus, type MaybePaginated, type PaginationMeta } from "../github/response";
@@ -19,6 +20,7 @@ import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
 import { applyPullState, pullStateChannel, type PullState } from "./pull-state";
 import { setCopyTarget } from "./copy-link";
 import { GROUP_OPTIONS, groupRows, type GroupBy } from "./grouping";
+import { parseGroups, type CustomGroup } from "./pr-ref";
 import { expandOrQuery } from "./or-query";
 import { resolveRelativeDates } from "./relative-date";
 import { groupIntoStacks, rowStackPositions, type PullBranches } from "./stack";
@@ -37,6 +39,10 @@ const INITIAL_STATUS_MAX_AGE_MS = 10 * 1000;
 
 export class GithubQuery {
 	private source = "";
+	/** The `groups` of the block, parsed when the query runs */
+	private customGroups: CustomGroup[] = [];
+	/** Listed pull requests GitHub did not return, shown under the switch */
+	private missingPulls: PullRef[] = [];
 	/** Picked with the switch; falls back to the session memory, then to `groupBy` of the block */
 	private grouping: GroupBy | null = null;
 	private statusMaxAgeMs = INITIAL_STATUS_MAX_AGE_MS;
@@ -233,6 +239,8 @@ export class GithubQuery {
 	}
 
 	public async executeQuery(skipCache = false): Promise<MaybePaginated<TableResult> | null> {
+		// Fails before any request when the groups are malformed, so a typo shows in the block
+		this.customGroups = this.params.groups ? parseGroups(this.params.groups) : [];
 		const params = this.params.query ? { ...this.params, query: resolveRelativeDates(this.params.query) } : this.params;
 		const segments = params.query ? expandOrQuery(params.query) : [];
 		let result: MaybePaginated<TableResult> | null;
@@ -243,12 +251,63 @@ export class GithubQuery {
 		} else {
 			result = await this.fetchResult(params, skipCache);
 		}
+		if (this.customGroups.length > 0 && this.params.queryType === QueryType.PullRequest) {
+			result = await this.addListedPulls(result);
+		}
 		if (result && this.params.stack && this.params.queryType === QueryType.PullRequest) {
 			result.response = await this.groupByStack(result.response, skipCache);
 		}
 		// A reload from the refresh button asks for fresh data; an ordinary load may reuse seconds-old statuses
 		this.statusMaxAgeMs = skipCache ? 0 : INITIAL_STATUS_MAX_AGE_MS;
 		return result;
+	}
+
+	/**
+	 * Add the pull requests the `groups` list that the search did not return. They are fetched by
+	 * reference, many per request. Ones GitHub does not return are remembered for the notice.
+	 */
+	private async addListedPulls(result: MaybePaginated<TableResult> | null): Promise<MaybePaginated<TableResult>> {
+		const have = new Set<string>();
+		for (const row of result?.response ?? []) {
+			const [org, repo] = this.getRepoFullName(row)?.split("/") ?? [];
+			if (org && repo) {
+				have.add(pullKey({ org, repo, number: row.number }));
+			}
+		}
+		const wanted = new Map<string, PullRef>();
+		for (const ref of this.customGroups.flatMap((group) => group.refs)) {
+			const key = pullKey(ref);
+			if (!have.has(key)) {
+				wanted.set(key, ref);
+			}
+		}
+
+		this.missingPulls = [];
+		const meta = result?.meta ?? {};
+		const rows = result?.response ?? [];
+		if (wanted.size === 0) {
+			return { meta, response: rows };
+		}
+		const fetched = await getPullSummaries([...wanted.values()]);
+		this.missingPulls = fetched.missing;
+		return { meta, response: [...rows, ...fetched.rows.values()] as TableResult };
+	}
+
+	/**
+	 * The group each listed pull request belongs to and its position there. One that several groups
+	 * list stays in the first.
+	 */
+	private listing(): Map<string, { group: string; index: number }> {
+		const listing = new Map<string, { group: string; index: number }>();
+		for (const group of this.customGroups) {
+			group.refs.forEach((ref, index) => {
+				const key = pullKey(ref);
+				if (!listing.has(key)) {
+					listing.set(key, { group: group.name, index });
+				}
+			});
+		}
+		return listing;
 	}
 
 	/**
@@ -554,7 +613,11 @@ export class GithubQuery {
 	}
 
 	private getGrouping(): GroupBy {
-		return this.grouping ?? sessionGrouping.get(this.source) ?? this.params.groupBy ?? "none";
+		const hasCustom = this.customGroups.length > 0;
+		const chosen =
+			this.grouping ?? sessionGrouping.get(this.source) ?? this.params.groupBy ?? (hasCustom ? "custom" : "none");
+		// Custom groups only exist when the block defines them
+		return chosen === "custom" && !hasCustom ? "none" : chosen;
 	}
 
 	/** Groupings whose groups depend on state that can change after the list loaded */
@@ -572,6 +635,13 @@ export class GithubQuery {
 			this.renderGroupSwitch(parent, grouping);
 		}
 
+		if (this.missingPulls.length > 0) {
+			parent.createDiv({
+				cls: "github-link-cards-missing",
+				text: `Could not load: ${this.missingPulls.map((ref) => `${ref.org}/${ref.repo}#${ref.number}`).join(", ")} (no such pull request, or no access)`,
+			});
+		}
+
 		// One grid for the whole block: every card (and group, and stack) is a subgrid of it, so the
 		// columns line up across all of them. Tracks: icon, title, one per side cell.
 		const sideColumns = columns.filter((c) => !["title", "status", "stack"].includes(c));
@@ -582,7 +652,26 @@ export class GithubQuery {
 		const root = parent.createDiv({ cls: "github-link-cards-root" });
 		root.style.setProperty("--side-cells", `${sideCells}`);
 
+		const listing = this.listing();
+		// Rows of one stack are consecutive in the result; give each stack an id so grouping can keep it together
+		const stackRuns = new Map<object, number>();
+		let run = 0;
+		for (const row of result) {
+			const stack = rowStackPositions.get(row);
+			if (stack) {
+				run += stack.position === 1 ? 1 : 0;
+				stackRuns.set(row, run);
+			}
+		}
+		const keyOf = (row: TableResult[number]) => {
+			const [org, repo] = this.getRepoFullName(row)?.split("/") ?? [];
+			return org && repo ? pullKey({ org, repo, number: row.number }) : "";
+		};
+
 		const groups = groupRows([...result], grouping, {
+			custom: (row) => listing.get(keyOf(row)) ?? null,
+			customGroups: this.customGroups.map((group) => group.name),
+			stackRun: (row) => stackRuns.get(row) ?? null,
 			repo: (row) => this.getRepoFullName(row),
 			status: (row) => getSearchResultPRStatus(row),
 			author: (row) => row.user?.login ?? null,
@@ -613,7 +702,8 @@ export class GithubQuery {
 	private renderGroupSwitch(parent: HTMLElement, grouping: GroupBy): void {
 		const toolbar = parent.createDiv({ cls: "github-link-cards-toolbar" });
 		const select = toolbar.createEl("select", { cls: "dropdown", attr: { "aria-label": "Group pull requests" } });
-		for (const option of GROUP_OPTIONS) {
+		const options = GROUP_OPTIONS.filter((option) => option.value !== "custom" || this.customGroups.length > 0);
+		for (const option of options) {
 			const element = select.createEl("option", { text: option.label, value: option.value });
 			element.selected = option.value === grouping;
 		}

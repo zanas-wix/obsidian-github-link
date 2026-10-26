@@ -13,6 +13,7 @@ import {
 	buildDraftMutation,
 	buildMergeMutation,
 } from "./pull-actions";
+import { buildPullSummaryQuery, parsePullSummaries, type PullSummaries } from "./pull-summary";
 import { buildPullStatusQuery, parsePullStatuses, pullKey, type PullRef, type PullStatus } from "./pull-status";
 import { GitHubApi } from "./api";
 import type {
@@ -89,6 +90,31 @@ const PULL_STATUS_BATCH_SIZE = 25;
 
 /** Latest status per pull request, shared by every query block so the same PR is never fetched twice at once */
 const pullStatusCache = new Map<string, { status: PullStatus; fetchedAt: number }>();
+
+/**
+ * Pull requests by reference, as list rows, 25 per request. References GitHub does not return
+ * (no such PR, or no access) are reported in `missing`.
+ */
+export async function getPullSummaries(refs: PullRef[]): Promise<PullSummaries> {
+	const result: PullSummaries = { rows: new Map(), missing: [] };
+	const byOrg = new Map<string, PullRef[]>();
+	for (const ref of refs) {
+		byOrg.set(ref.org, [...(byOrg.get(ref.org) ?? []), ref]);
+	}
+	for (const [org, orgRefs] of byOrg) {
+		for (let i = 0; i < orgRefs.length; i += PULL_STATUS_BATCH_SIZE) {
+			const batch = orgRefs.slice(i, i + PULL_STATUS_BATCH_SIZE);
+			const data = await api.graphql<Parameters<typeof parsePullSummaries>[1]>(
+				buildPullSummaryQuery(batch),
+				getToken(org),
+			);
+			const parsed = parsePullSummaries(batch, data);
+			parsed.rows.forEach((row, key) => result.rows.set(key, row));
+			result.missing.push(...parsed.missing);
+		}
+	}
+	return result;
+}
 
 /**
  * Review, merge and CI state for pull requests, batched into as few GraphQL requests as possible

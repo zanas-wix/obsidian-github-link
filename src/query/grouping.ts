@@ -1,7 +1,7 @@
 import { isReadyToMerge, type PullStatus } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
 
-export type GroupBy = "none" | "repo" | "status" | "author" | "updated" | "readiness";
+export type GroupBy = "none" | "repo" | "status" | "author" | "updated" | "readiness" | "custom";
 
 export const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
 	{ value: "none", label: "No grouping" },
@@ -10,7 +10,11 @@ export const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
 	{ value: "author", label: "By author" },
 	{ value: "updated", label: "By last update" },
 	{ value: "readiness", label: "By merge readiness" },
+	{ value: "custom", label: "Custom groups" },
 ];
+
+/** The label of rows no custom group lists */
+export const OTHER_GROUP = "Other";
 
 export interface Group<T> {
 	key: string;
@@ -29,6 +33,12 @@ export interface GroupContext<T> {
 	/** Review, CI and merge state; undefined until the lazy status load has finished */
 	pullStatus: (row: T) => PullStatus | undefined;
 	now: number;
+	/** For "custom": the group a row is listed in and its position there; null when no group lists it */
+	custom?: (row: T) => { group: string; index: number } | null;
+	/** For "custom": the group names in the order the block defines them */
+	customGroups?: string[];
+	/** For "custom": rows with the same non-null id are a stack and stay together, in their given order */
+	stackRun?: (row: T) => number | null;
 }
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -123,9 +133,22 @@ export function groupRows<T>(rows: T[], by: GroupBy, ctx: GroupContext<T>): Grou
 				add(label, label, row);
 				break;
 			}
+			case "custom": {
+				const listed = ctx.custom?.(row);
+				add(listed?.group ?? OTHER_GROUP, listed?.group ?? OTHER_GROUP, row);
+				break;
+			}
 		}
 	}
 
+	const result = [...groups.values()];
+	if (by === "custom") {
+		const names = [...(ctx.customGroups ?? []), OTHER_GROUP];
+		for (const group of result) {
+			group.rows = orderAsListed(group.rows, ctx);
+		}
+		return result.sort((a, b) => names.indexOf(a.label) - names.indexOf(b.label));
+	}
 	const order =
 		by === "status"
 			? Object.values(STATUS_GROUPS)
@@ -136,6 +159,31 @@ export function groupRows<T>(rows: T[], by: GroupBy, ctx: GroupContext<T>): Grou
 				: by === "readiness"
 					? READINESS_GROUPS
 					: null;
-	const result = [...groups.values()];
 	return order ? result.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label)) : result;
+}
+
+/**
+ * Rows in the order the block lists them. A stack stays together, in its own order, at the place of
+ * its earliest listed member, so listing a stack top-first does not tear it apart. Rows nobody lists
+ * keep their given order after the listed ones.
+ */
+function orderAsListed<T>(rows: T[], ctx: GroupContext<T>): T[] {
+	const units: { key: number; rows: T[] }[] = [];
+	const runs = new Map<number, { key: number; rows: T[] }>();
+	for (const row of rows) {
+		const index = ctx.custom?.(row)?.index ?? Number.MAX_SAFE_INTEGER;
+		const run = ctx.stackRun?.(row) ?? null;
+		const existing = run === null ? undefined : runs.get(run);
+		if (existing) {
+			existing.rows.push(row);
+			existing.key = Math.min(existing.key, index);
+			continue;
+		}
+		const unit = { key: index, rows: [row] };
+		units.push(unit);
+		if (run !== null) {
+			runs.set(run, unit);
+		}
+	}
+	return units.sort((a, b) => a.key - b.key).flatMap((unit) => unit.rows);
 }

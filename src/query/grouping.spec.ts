@@ -131,3 +131,50 @@ describe("readinessGroup", () => {
 		expect(readinessGroup(pull({ merge: "unknown" }))).toBe("Checking…");
 	});
 });
+
+describe("custom groups", () => {
+	interface R extends Row {
+		listed?: [string, number];
+		run?: number;
+	}
+	const custom: GroupContext<R> = {
+		...ctx,
+		custom: (row) => (row.listed ? { group: row.listed[0], index: row.listed[1] } : null),
+		customGroups: ["Pages", "Blog"],
+		stackRun: (row) => row.run ?? null,
+	};
+
+	it("shows groups in the order the block defines them, with unlisted rows last under Other", () => {
+		const rows: R[] = [{ id: 1, listed: ["Blog", 0] }, { id: 2 }, { id: 3, listed: ["Pages", 0] }];
+		expect(ids(groupRows(rows, "custom", custom))).toEqual([
+			["Pages", [3]],
+			["Blog", [1]],
+			["Other", [2]],
+		]);
+	});
+
+	it("keeps rows in the order they are listed, not the order the search returned them", () => {
+		const rows: R[] = [
+			{ id: 1, listed: ["Pages", 2] },
+			{ id: 2, listed: ["Pages", 0] },
+			{ id: 3, listed: ["Pages", 1] },
+		];
+		expect(ids(groupRows(rows, "custom", custom))).toEqual([["Pages", [2, 3, 1]]]);
+	});
+
+	it("keeps a stack together in its own order at its earliest listed member", () => {
+		// 10, 11, 12 are one stack (bottom first) listed top-first; 20 is listed between them
+		const rows: R[] = [
+			{ id: 10, run: 1, listed: ["Pages", 3] },
+			{ id: 11, run: 1, listed: ["Pages", 1] },
+			{ id: 12, run: 1, listed: ["Pages", 0] },
+			{ id: 20, listed: ["Pages", 2] },
+			{ id: 30, listed: ["Pages", 4] },
+		];
+		expect(ids(groupRows(rows, "custom", custom))).toEqual([["Pages", [10, 11, 12, 20, 30]]]);
+	});
+
+	it("shows no empty groups", () => {
+		expect(ids(groupRows([{ id: 1, listed: ["Blog", 0] } as R], "custom", custom))).toEqual([["Blog", [1]]]);
+	});
+});
