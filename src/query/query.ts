@@ -19,7 +19,7 @@ import { pullWatcher } from "../watch/watcher";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
 import { applyPullState, pullStateChannel, type PullState } from "./pull-state";
 import { setCopyTarget } from "./copy-link";
-import { GROUP_OPTIONS, groupRows, type GroupBy } from "./grouping";
+import { GROUP_OPTIONS, groupNested, isGroupBy, type Group, type GroupBy } from "./grouping";
 import { parseGroups, type CustomGroup } from "./pr-ref";
 import { expandOrQuery } from "./or-query";
 import { resolveRelativeDates } from "./relative-date";
@@ -612,12 +612,13 @@ export class GithubQuery {
 		this.scheduleStatusPoll();
 	}
 
+	/**
+	 * How cards are grouped: with custom groups defined this is the sub-grouping inside each of them.
+	 * Unknown values from a block fall back to none rather than showing an empty list.
+	 */
 	private getGrouping(): GroupBy {
-		const hasCustom = this.customGroups.length > 0;
-		const chosen =
-			this.grouping ?? sessionGrouping.get(this.source) ?? this.params.groupBy ?? (hasCustom ? "custom" : "none");
-		// Custom groups only exist when the block defines them
-		return chosen === "custom" && !hasCustom ? "none" : chosen;
+		const chosen = this.grouping ?? sessionGrouping.get(this.source) ?? this.params.groupBy;
+		return isGroupBy(chosen) ? chosen : "none";
 	}
 
 	/** Groupings whose groups depend on state that can change after the list loaded */
@@ -668,7 +669,7 @@ export class GithubQuery {
 			return org && repo ? pullKey({ org, repo, number: row.number }) : "";
 		};
 
-		const groups = groupRows([...result], grouping, {
+		const groups = groupNested([...result], grouping, {
 			custom: (row) => listing.get(keyOf(row)) ?? null,
 			customGroups: this.customGroups.map((group) => group.name),
 			stackRun: (row) => stackRuns.get(row) ?? null,
@@ -680,18 +681,42 @@ export class GithubQuery {
 			now: Date.now(),
 		});
 		for (const group of groups) {
-			if (grouping === "none") {
-				this.renderCardRows(root.createDiv({ cls: "github-link-cards" }), queryType, columns, group.rows);
-				continue;
+			// Without any grouping the single group has no heading
+			this.renderGroup(root, group, queryType, columns, grouping === "none" && this.customGroups.length === 0, false);
+		}
+	}
+
+	/**
+	 * A heading with its cards; a group with `children` has a heading and then its sub-groups, each with
+	 * a smaller heading of its own.
+	 */
+	private renderGroup(
+		parent: HTMLElement,
+		group: Group<TableResult[number]>,
+		queryType: QueryType,
+		columns: string[],
+		headless: boolean,
+		nested: boolean,
+	): void {
+		if (headless) {
+			this.renderCardRows(parent.createDiv({ cls: "github-link-cards" }), queryType, columns, group.rows);
+			return;
+		}
+		const section = parent.createDiv({ cls: "github-link-cards-group" });
+		section.toggleClass("is-nested", nested);
+		const heading = section.createDiv({ cls: "github-link-cards-group-heading" });
+		if (group.href) {
+			heading.createEl("a", { text: group.label, href: group.href, attr: { target: "_blank" } });
+		} else {
+			heading.createSpan({ text: group.label });
+		}
+		heading.createSpan({ cls: "github-link-cards-group-count", text: `${group.rows.length}` });
+
+		if (group.children) {
+			for (const child of group.children) {
+				this.renderGroup(section, child, queryType, columns, false, true);
 			}
-			const section = root.createDiv({ cls: "github-link-cards-group" });
-			const heading = section.createDiv({ cls: "github-link-cards-group-heading" });
-			if (group.href) {
-				heading.createEl("a", { text: group.label, href: group.href, attr: { target: "_blank" } });
-			} else {
-				heading.createSpan({ text: group.label });
-			}
-			heading.createSpan({ cls: "github-link-cards-group-count", text: `${group.rows.length}` });
+		} else {
 			this.renderCardRows(section.createDiv({ cls: "github-link-cards" }), queryType, columns, group.rows);
 		}
 	}
@@ -701,10 +726,19 @@ export class GithubQuery {
 	 */
 	private renderGroupSwitch(parent: HTMLElement, grouping: GroupBy): void {
 		const toolbar = parent.createDiv({ cls: "github-link-cards-toolbar" });
-		const select = toolbar.createEl("select", { cls: "dropdown", attr: { "aria-label": "Group pull requests" } });
-		const options = GROUP_OPTIONS.filter((option) => option.value !== "custom" || this.customGroups.length > 0);
-		for (const option of options) {
-			const element = select.createEl("option", { text: option.label, value: option.value });
+		// With custom groups on top, the switch chooses what splits each of them
+		const nested = this.customGroups.length > 0;
+		const select = toolbar.createEl("select", {
+			cls: "dropdown",
+			attr: { "aria-label": nested ? "Group within each custom group" : "Group pull requests" },
+		});
+		for (const option of GROUP_OPTIONS) {
+			const label = !nested
+				? option.label
+				: option.value === "none"
+					? "No sub-groups"
+					: option.label.replace(/^By /, "Then by ");
+			const element = select.createEl("option", { text: label, value: option.value });
 			element.selected = option.value === grouping;
 		}
 		select.addEventListener("change", () => {

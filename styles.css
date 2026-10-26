@@ -1139,3 +1139,13 @@ a.github-link-pr-file:hover {
 	color: var(--text-error);
 	font-size: var(--font-ui-smaller);
 }
+
+/* Sub-groups inside a custom group: indented, with a smaller heading */
+.github-link-cards-group.is-nested {
+	margin-inline-start: 12px;
+	margin-top: 8px;
+}
+.github-link-cards-group.is-nested > .github-link-cards-group-heading {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}

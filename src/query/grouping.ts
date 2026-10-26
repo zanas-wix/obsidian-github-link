@@ -1,7 +1,7 @@
 import { isReadyToMerge, type PullStatus } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
 
-export type GroupBy = "none" | "repo" | "status" | "author" | "updated" | "readiness" | "custom";
+export type GroupBy = "none" | "repo" | "status" | "author" | "updated" | "readiness";
 
 export const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
 	{ value: "none", label: "No grouping" },
@@ -10,8 +10,12 @@ export const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
 	{ value: "author", label: "By author" },
 	{ value: "updated", label: "By last update" },
 	{ value: "readiness", label: "By merge readiness" },
-	{ value: "custom", label: "Custom groups" },
 ];
+
+/** Whether a value read from a block is a grouping we know; anything else would silently show nothing */
+export function isGroupBy(value: unknown): value is GroupBy {
+	return GROUP_OPTIONS.some((option) => option.value === value);
+}
 
 /** The label of rows no custom group lists */
 export const OTHER_GROUP = "Other";
@@ -22,6 +26,8 @@ export interface Group<T> {
 	/** Where the heading links to, when it names something with a page of its own */
 	href?: string;
 	rows: T[];
+	/** Sub-groups of `rows`, when the groups are nested (custom groups, each grouped further) */
+	children?: Group<T>[];
 }
 
 /** How to read each grouping criterion off a row; injected so the grouping rules stay independent of GitHub's response shapes */
@@ -33,11 +39,11 @@ export interface GroupContext<T> {
 	/** Review, CI and merge state; undefined until the lazy status load has finished */
 	pullStatus: (row: T) => PullStatus | undefined;
 	now: number;
-	/** For "custom": the group a row is listed in and its position there; null when no group lists it */
+	/** Custom groups: the group a row is listed in and its position there; null when no group lists it */
 	custom?: (row: T) => { group: string; index: number } | null;
-	/** For "custom": the group names in the order the block defines them */
+	/** Custom groups: the group names in the order the block defines them */
 	customGroups?: string[];
-	/** For "custom": rows with the same non-null id are a stack and stay together, in their given order */
+	/** Custom groups: rows with the same non-null id are a stack and stay together, in their given order */
 	stackRun?: (row: T) => number | null;
 }
 
@@ -133,22 +139,10 @@ export function groupRows<T>(rows: T[], by: GroupBy, ctx: GroupContext<T>): Grou
 				add(label, label, row);
 				break;
 			}
-			case "custom": {
-				const listed = ctx.custom?.(row);
-				add(listed?.group ?? OTHER_GROUP, listed?.group ?? OTHER_GROUP, row);
-				break;
-			}
 		}
 	}
 
 	const result = [...groups.values()];
-	if (by === "custom") {
-		const names = [...(ctx.customGroups ?? []), OTHER_GROUP];
-		for (const group of result) {
-			group.rows = orderAsListed(group.rows, ctx);
-		}
-		return result.sort((a, b) => names.indexOf(a.label) - names.indexOf(b.label));
-	}
 	const order =
 		by === "status"
 			? Object.values(STATUS_GROUPS)
@@ -160,6 +154,37 @@ export function groupRows<T>(rows: T[], by: GroupBy, ctx: GroupContext<T>): Grou
 					? READINESS_GROUPS
 					: null;
 	return order ? result.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label)) : result;
+}
+
+/**
+ * The top level when a block defines `groups`: one group per name, in the order the block writes
+ * them, then "Other" for rows no group lists. Empty groups are left out.
+ */
+export function groupCustom<T>(rows: T[], ctx: GroupContext<T>): Group<T>[] {
+	const groups = new Map<string, Group<T>>();
+	for (const row of rows) {
+		const name = ctx.custom?.(row)?.group ?? OTHER_GROUP;
+		const group = groups.get(name) ?? { key: name, label: name, rows: [] };
+		group.rows.push(row);
+		groups.set(name, group);
+	}
+	const names = [...(ctx.customGroups ?? []), OTHER_GROUP];
+	return [...groups.values()]
+		.map((group) => ({ ...group, rows: orderAsListed(group.rows, ctx) }))
+		.sort((a, b) => names.indexOf(a.label) - names.indexOf(b.label));
+}
+
+/**
+ * The groups to show: custom groups on top when the block defines any, each split further by `by`;
+ * otherwise just `by`.
+ */
+export function groupNested<T>(rows: T[], by: GroupBy, ctx: GroupContext<T>): Group<T>[] {
+	if (!ctx.customGroups?.length) {
+		return groupRows(rows, by, ctx);
+	}
+	return groupCustom(rows, ctx).map((group) =>
+		by === "none" ? group : { ...group, children: groupRows(group.rows, by, ctx) },
+	);
 }
 
 /**

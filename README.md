@@ -78,7 +78,7 @@ groups:
 ```
 ````
 
-A pull request is `org/repo#123` or its URL. Listed PRs are shown even if the block's `query` does not return them, so a block may have no `query` at all; ones the query returns anyway are not fetched twice. Groups appear in the order written and PRs inside them in the order listed; a stack stays together at its earliest listed member. PRs the query returns that no group lists go under "Other". A PR listed in several groups stays in the first. A reference that is malformed fails the block with a message naming it; one GitHub cannot return (no such PR, or no access) is reported above the list. The grouping dropdown gains "Custom groups", which is the starting grouping when a block defines groups.
+A pull request is `org/repo#123` or its URL. Listed PRs are shown even if the block's `query` does not return them, so a block may have no `query` at all; ones the query returns anyway are not fetched twice. Groups appear in the order written and PRs inside them in the order listed; a stack stays together at its earliest listed member. PRs the query returns that no group lists go under "Other". A PR listed in several groups stays in the first. A reference that is malformed fails the block with a message naming it; one GitHub cannot return (no such PR, or no access) is reported above the list. With groups defined they are always the top level, and the grouping dropdown (relabelled "Then by …") splits each of them further: by repo, status, author, last update or merge readiness. `groupBy: repo` sets that starting sub-grouping.
 
 See the [documentation](https://github.com/nathonius/obsidian-github-link/wiki) for more info.
 

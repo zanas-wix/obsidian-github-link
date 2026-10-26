@@ -109,8 +109,9 @@ export interface QueryParams {
 	stack?: boolean;
 
 	/**
-	 * Cards output only: how cards are grouped to start with. The switch above the list can change it:
-	 * none, repo, status, author, updated or readiness.
+	 * Cards output only: how cards are grouped to start with (none, repo, status, author, updated or
+	 * readiness); the switch above the list can change it. With `groups` defined, the custom groups are
+	 * always the top level and this is how each of them is split further.
 	 */
 	groupBy?: GroupBy;
 
@@ -129,7 +130,7 @@ export interface QueryParams {
 	/**
 	 * Pull requests only: named sets of specific pull requests, e.g. everything for one feature across
 	 * repos. Listed PRs are shown even when the query does not return them, so a block may have no
-	 * `query` at all. Cards group by these sets (switch: "Custom groups"). A PR listed twice stays in
+	 * `query` at all. Cards show these sets as the top level, each optionally split further by `groupBy`. A PR listed twice stays in
 	 * the first group that lists it.
 	 */
 	groups?: { name: string; prs: string[] }[];

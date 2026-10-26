@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import type { PullStatus } from "../github/pull-status";
 import { IssueStatus } from "../github/response";
-import { groupRows, readinessGroup, type GroupContext } from "./grouping";
+import { groupCustom, groupNested, groupRows, isGroupBy, readinessGroup, type GroupContext } from "./grouping";
 
 interface Row {
 	id: number;
@@ -146,7 +146,7 @@ describe("custom groups", () => {
 
 	it("shows groups in the order the block defines them, with unlisted rows last under Other", () => {
 		const rows: R[] = [{ id: 1, listed: ["Blog", 0] }, { id: 2 }, { id: 3, listed: ["Pages", 0] }];
-		expect(ids(groupRows(rows, "custom", custom))).toEqual([
+		expect(ids(groupCustom(rows, custom))).toEqual([
 			["Pages", [3]],
 			["Blog", [1]],
 			["Other", [2]],
@@ -159,7 +159,7 @@ describe("custom groups", () => {
 			{ id: 2, listed: ["Pages", 0] },
 			{ id: 3, listed: ["Pages", 1] },
 		];
-		expect(ids(groupRows(rows, "custom", custom))).toEqual([["Pages", [2, 3, 1]]]);
+		expect(ids(groupCustom(rows, custom))).toEqual([["Pages", [2, 3, 1]]]);
 	});
 
 	it("keeps a stack together in its own order at its earliest listed member", () => {
@@ -171,10 +171,56 @@ describe("custom groups", () => {
 			{ id: 20, listed: ["Pages", 2] },
 			{ id: 30, listed: ["Pages", 4] },
 		];
-		expect(ids(groupRows(rows, "custom", custom))).toEqual([["Pages", [10, 11, 12, 20, 30]]]);
+		expect(ids(groupCustom(rows, custom))).toEqual([["Pages", [10, 11, 12, 20, 30]]]);
 	});
 
 	it("shows no empty groups", () => {
-		expect(ids(groupRows([{ id: 1, listed: ["Blog", 0] } as R], "custom", custom))).toEqual([["Blog", [1]]]);
+		expect(ids(groupCustom([{ id: 1, listed: ["Blog", 0] } as R], custom))).toEqual([["Blog", [1]]]);
+	});
+
+	describe("nested", () => {
+		const rows: R[] = [
+			{ id: 1, repo: "o/a", listed: ["Pages", 0] },
+			{ id: 2, repo: "o/b", listed: ["Pages", 1] },
+			{ id: 3, repo: "o/a", listed: ["Pages", 2] },
+			{ id: 4, repo: "o/b", listed: ["Blog", 0] },
+			{ id: 5, repo: "o/a" },
+		];
+
+		it("splits each custom group by the chosen grouping, keeping the listed order inside", () => {
+			const groups = groupNested(rows, "repo", custom);
+			expect(groups.map((g) => g.label)).toEqual(["Pages", "Blog", "Other"]);
+			expect(groups.map((g) => ids(g.children ?? []))).toEqual([
+				[
+					["o/a", [1, 3]],
+					["o/b", [2]],
+				],
+				[["o/b", [4]]],
+				[["o/a", [5]]],
+			]);
+			expect(groups[0].rows.map((r) => r.id)).toEqual([1, 2, 3]);
+		});
+
+		it("leaves custom groups unsplit when not sub-grouping", () => {
+			const groups = groupNested(rows, "none", custom);
+			expect(groups.map((g) => g.children)).toEqual([undefined, undefined, undefined]);
+		});
+
+		it("is plain single-level grouping when the block defines no custom groups", () => {
+			const plain = { ...custom, customGroups: [] };
+			expect(ids(groupNested(rows, "repo", plain))).toEqual([
+				["o/a", [1, 3, 5]],
+				["o/b", [2, 4]],
+			]);
+		});
+	});
+});
+
+describe("isGroupBy", () => {
+	it("accepts the known groupings only", () => {
+		expect(isGroupBy("repo")).toBe(true);
+		expect(isGroupBy("custom")).toBe(false);
+		expect(isGroupBy("typo")).toBe(false);
+		expect(isGroupBy(undefined)).toBe(false);
 	});
 });
