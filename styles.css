@@ -428,6 +428,11 @@ body.theme-dark .github-link-table .github-link-table-labels .github-link-table-
  * subgrid of .github-link-cards-root, so the columns line up across all cards.
  * Tracks: status icon, title (takes the rest), one per right-hand cell.
  */
+/* The wrapper is the container the narrow-layout rules below query */
+.github-link-cards-wrapper {
+	container-type: inline-size;
+}
+
 .github-link-cards-root {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) repeat(var(--side-cells, 0), auto);
@@ -1190,4 +1195,69 @@ a.github-link-pr-file:hover {
 .github-link-lines-popover-files,
 .github-link-lines-popover-note {
 	color: var(--text-muted);
+}
+
+/*
+ * Narrow lists: when the columns no longer fit beside the title, every card becomes two rows. The icon
+ * and the title stay on the first, and the other columns wrap onto a second one under the title. The
+ * width at which that happens depends on how many columns there are (data-density, from card-layout.ts),
+ * so the same rules appear once per band, each with its own breakpoint.
+ */
+@container (max-width: 480px) {
+	.github-link-cards-root {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+	.github-link-cards-root .github-link-card-side {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 2px 12px;
+		grid-column: 2 / -1;
+	}
+	/* Cells that have nothing to show would only add gaps */
+	.github-link-cards-root .github-link-card-side > :empty {
+		display: none;
+	}
+	/* The tree guide ends level with the title, not the middle of the two rows */
+	.github-link-cards-root .github-link-cards-stack > .github-link-card-nested::before {
+		height: 18px;
+	}
+}
+@container (max-width: 680px) {
+	.github-link-cards-root:is([data-density="some"], [data-density="many"]) {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+	.github-link-cards-root:is([data-density="some"], [data-density="many"]) .github-link-card-side {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 2px 12px;
+		grid-column: 2 / -1;
+	}
+	.github-link-cards-root:is([data-density="some"], [data-density="many"]) .github-link-card-side > :empty {
+		display: none;
+	}
+	.github-link-cards-root:is([data-density="some"], [data-density="many"])
+		.github-link-cards-stack
+		> .github-link-card-nested::before {
+		height: 18px;
+	}
+}
+@container (max-width: 900px) {
+	.github-link-cards-root[data-density="many"] {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+	.github-link-cards-root[data-density="many"] .github-link-card-side {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 2px 12px;
+		grid-column: 2 / -1;
+	}
+	.github-link-cards-root[data-density="many"] .github-link-card-side > :empty {
+		display: none;
+	}
+	.github-link-cards-root[data-density="many"] .github-link-cards-stack > .github-link-card-nested::before {
+		height: 18px;
+	}
 }

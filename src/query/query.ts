@@ -19,6 +19,7 @@ import { pullWatcher } from "../watch/watcher";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./column/defaults";
 import { applyPullState, pullStateChannel, type PullState } from "./pull-state";
 import { setCopyTarget } from "./copy-link";
+import { cardDensity } from "./card-layout";
 import { GROUP_OPTIONS, groupNested, isGroupBy, type Group, type GroupBy } from "./grouping";
 import { parseGroups, type CustomGroup } from "./pr-ref";
 import { expandOrQuery } from "./or-query";
@@ -653,6 +654,7 @@ export class GithubQuery {
 			(sideColumns.some((c) => STATUS_COLUMNS.includes(c)) ? 1 : 0);
 		const root = parent.createDiv({ cls: "github-link-cards-root" });
 		root.style.setProperty("--side-cells", `${sideCells}`);
+		root.dataset.density = cardDensity(sideCells);
 
 		const listing = this.listing();
 		// Rows of one stack are consecutive in the result; give each stack an id so grouping can keep it together
