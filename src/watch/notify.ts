@@ -10,7 +10,7 @@ import type { WatchedPull, WatchEvent } from "./watcher";
  */
 export function notify(pull: WatchedPull, event: WatchEvent): void {
 	const { title, detail } = describe(pull, event);
-	const body = `${pull.title}\n${detail}`;
+	const body = [`${pull.ref.org}/${pull.ref.repo}`, pull.title, detail].filter(Boolean).join("\n");
 
 	// Only "ready" is worth a notice that stays until dismissed
 	const fallback = () => new Notice(`${title}: ${pull.title}`, event.kind === "ready" ? 0 : 8000);
@@ -35,9 +35,9 @@ export function notify(pull: WatchedPull, event: WatchEvent): void {
 }
 
 function describe(pull: WatchedPull, event: WatchEvent): { title: string; detail: string } {
-	const prefix = `#${pull.ref.number}`;
+	const prefix = `${pull.ref.repo} #${pull.ref.number}`;
 	if (event.kind === "ready") {
-		return { title: `${prefix} is ready to merge`, detail: `${pull.ref.org}/${pull.ref.repo}` };
+		return { title: `${prefix} is ready to merge`, detail: "" };
 	}
 	const what = [event.ciPassed ? "CI passed" : "", event.approved ? "approved" : ""].filter(Boolean).join(" and ");
 	return { title: `${prefix}: ${what}`, detail: `Still waiting on: ${event.blockers.join(", ")}` };
