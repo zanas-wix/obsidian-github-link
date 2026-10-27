@@ -1,10 +1,20 @@
 import { describe, expect, it } from "@jest/globals";
 import type { TimelineItem } from "../github/pull-detail";
-import { findCiReport, linkDomain, parseCiReport, queryParams } from "./ci-report";
+import {
+	findCiReport,
+	hasScreenshotDiffs,
+	linkDomain,
+	parseCiBuild,
+	parseCiReport,
+	queryParams,
+	screenshotDiffUrl,
+} from "./ci-report";
 
 const BODY = `<h3> &#9940;&nbsp; Status: Failed </h3>
 <p>To re-trigger the build, add the comment <code>#rebuild</code></p>
-<table><tr><td><a href="https://wix-bo.com/x/preview-releases">Deploy Previews</a></td></tr></table>
+<table><tr><td> <h3>Commit: <a href="https://github.com/wix-private/ricos/pull/10779/commits/f3f673bc36762a49ee083bb067f2e2878828a569">f3f673b</a></h3></td>
+<td><a href="https://wix-bo.com/dev/repo/wix-private/ricos/build/6888d7a7-cb12-47d9-9c29-81608695a174">Full Report</a></td>
+<td><a href="https://wix-bo.com/x/preview-releases">Deploy Previews</a></td></tr></table>
 
 ### Validation Failures
 
@@ -58,7 +68,7 @@ describe("parseCiReport", () => {
 	});
 
 	it("finds nothing in an ordinary comment", () => {
-		expect(parseCiReport("Looks good to me")).toEqual({ failures: [], previews: [] });
+		expect(parseCiReport("Looks good to me")).toEqual({ failures: [], previews: [], build: null });
 	});
 });
 
@@ -104,5 +114,30 @@ describe("linkDomain", () => {
 
 	it("falls back to the given text when the address does not parse", () => {
 		expect(linkDomain("not a url", "label")).toBe("label");
+	});
+});
+
+describe("screenshot diff link", () => {
+	const ref = { org: "wix-private", repo: "ricos", number: 10779 };
+	const build = { commit: "f3f673bc36762a49ee083bb067f2e2878828a569", buildId: "6888d7a7-cb12-47d9-9c29-81608695a174" };
+
+	it("reads the commit and the build id from the run header of the comment", () => {
+		expect(parseCiReport(BODY).build).toEqual(build);
+	});
+
+	it("needs both, so a comment that only mentions one gives no build", () => {
+		expect(parseCiBuild("https://x/commits/f3f673bc36762a49ee083bb067f2e2878828a569")).toBeNull();
+		expect(parseCiBuild("https://x/build/6888d7a7-cb12-47d9-9c29-81608695a174")).toBeNull();
+	});
+
+	it("builds the sheshesh address exactly as in the real example", () => {
+		expect(screenshotDiffUrl(ref, build)).toBe(
+			"https://bo.wix.com/sheshesh-v3/ricos/10779/f3f673b-6888d7a7-cb12-47d9-9c29-81608695a174",
+		);
+	});
+
+	it("applies to sled3 jobs only", () => {
+		expect(hasScreenshotDiffs({ pkg: "p", validation: "test:sled3 script", logUrl: null })).toBe(true);
+		expect(hasScreenshotDiffs({ pkg: "p", validation: "test:types script", logUrl: null })).toBe(false);
 	});
 });

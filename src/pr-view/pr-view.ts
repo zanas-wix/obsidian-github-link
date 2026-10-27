@@ -25,7 +25,7 @@ import { diffAnchor } from "../github/diff-anchor";
 import { relativeTime } from "../util";
 import { pullWatcher } from "../watch/watcher";
 import { pullStateChannel } from "../query/pull-state";
-import { findCiReport, linkDomain, queryParams } from "./ci-report";
+import { findCiReport, hasScreenshotDiffs, linkDomain, queryParams, screenshotDiffUrl } from "./ci-report";
 import { bindCountdown, formatCountdown } from "./countdown";
 import { getDraftAction, getMergeAction } from "./merge-action";
 import { formatForLlm } from "./llm-copy";
@@ -486,8 +486,17 @@ export class PullRequestView extends ItemView {
 					attr: { title: failure.validation },
 				});
 				row.createSpan({ cls: "github-link-pr-failure-package", text: failure.pkg });
+				// Both links share the last column, so the grid keeps its three columns
+				const links = row.createSpan({ cls: "github-link-pr-failure-links" });
 				if (failure.logUrl) {
-					row.createEl("a", { text: "View log", href: failure.logUrl, attr: { target: "_blank" } });
+					links.createEl("a", { text: "View log", href: failure.logUrl, attr: { target: "_blank" } });
+				}
+				if (report.build && hasScreenshotDiffs(failure)) {
+					links.createEl("a", {
+						text: "Screenshot diffs",
+						href: screenshotDiffUrl(pull.ref, report.build),
+						attr: { target: "_blank", title: "Opens the screenshot diff tool for this run (needs your Wix login)" },
+					});
 				}
 			}
 		}

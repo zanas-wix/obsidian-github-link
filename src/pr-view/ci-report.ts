@@ -1,4 +1,5 @@
 import type { TimelineItem } from "../github/pull-detail";
+import type { PullRef } from "../github/pull-status";
 
 export interface ValidationFailure {
 	pkg: string;
@@ -14,9 +15,17 @@ export interface DeployPreview {
 	url: string;
 }
 
+/** The commit a CI run was for and the id of its Falcon build, both read from the bot's comment */
+export interface CiBuild {
+	commit: string;
+	buildId: string;
+}
+
 export interface CiReport {
 	failures: ValidationFailure[];
 	previews: DeployPreview[];
+	/** Null when the comment does not carry both (it is not a Falcon run comment) */
+	build: CiBuild | null;
 }
 
 /**
@@ -53,7 +62,33 @@ export function parseCiReport(body: string): CiReport {
 		}
 	}
 
-	return { failures, previews };
+	return { failures, previews, build: parseCiBuild(body) };
+}
+
+const COMMIT_LINK = /\/commits\/([0-9a-f]{40})\b/;
+const BUILD_LINK = /\/build\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/;
+
+/**
+ * The run header of a Falcon comment links the commit it built (`…/commits/<sha>`) and the build
+ * (`…/build/<uuid>`); the two belong together because they are in the same comment.
+ */
+export function parseCiBuild(body: string): CiBuild | null {
+	const commit = COMMIT_LINK.exec(body)?.[1];
+	const buildId = BUILD_LINK.exec(body)?.[1];
+	return commit && buildId ? { commit, buildId } : null;
+}
+
+/**
+ * The screenshot diff tool's page for a run: `sheshesh-v3/<repo>/<PR number>/<short commit>-<build id>`.
+ * The pattern was read off real links, and the page needs a Wix login, so it cannot be checked from here.
+ */
+export function screenshotDiffUrl(ref: PullRef, build: CiBuild): string {
+	return `https://bo.wix.com/sheshesh-v3/${ref.repo}/${ref.number}/${build.commit.slice(0, 7)}-${build.buildId}`;
+}
+
+/** Only the sled3 end-to-end jobs produce screenshot diffs */
+export function hasScreenshotDiffs(failure: ValidationFailure): boolean {
+	return /sled/i.test(failure.validation);
 }
 
 /**

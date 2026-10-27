@@ -1098,6 +1098,11 @@ a.github-link-pr-file:hover {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
+.github-link-pr-failure-links {
+	display: flex;
+	gap: 10px;
+	white-space: nowrap;
+}
 .github-link-pr-preview-package {
 	margin-top: 4px;
 	color: var(--text-muted);
