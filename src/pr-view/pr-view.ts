@@ -25,7 +25,15 @@ import { diffAnchor } from "../github/diff-anchor";
 import { relativeTime } from "../util";
 import { pullWatcher } from "../watch/watcher";
 import { pullStateChannel } from "../query/pull-state";
-import { findCiReport, hasScreenshotDiffs, linkDomain, queryParams, screenshotDiffUrl } from "./ci-report";
+import {
+	findCiReport,
+	hasScreenshotDiffs,
+	linkDomain,
+	queryParams,
+	runFreshness,
+	screenshotDiffUrl,
+	type CiReport,
+} from "./ci-report";
 import { bindCountdown, formatCountdown } from "./countdown";
 import { getDraftAction, getMergeAction } from "./merge-action";
 import { formatForLlm } from "./llm-copy";
@@ -475,6 +483,7 @@ export class PullRequestView extends ItemView {
 
 		if (report.failures.length > 0) {
 			const body = this.section(parent, "Validation failures", true, `${report.failures.length}`);
+			this.renderRunInfo(body, pull, report);
 			// One grid; every row is a subgrid of it, so the columns line up across rows
 			const grid = body.createDiv({ cls: "github-link-pr-failures" });
 			for (const failure of report.failures) {
@@ -530,6 +539,46 @@ export class PullRequestView extends ItemView {
 					attr: { target: "_blank", title: preview.url },
 				});
 			}
+		}
+	}
+
+	/**
+	 * Which commit the CI run was for, whether that is still the newest, and how long ago it finished.
+	 * The age keeps counting without redrawing the pane.
+	 */
+	private renderRunInfo(parent: HTMLElement, pull: PullDetail, report: CiReport): void {
+		if (!report.build && !report.at) {
+			return;
+		}
+		const info = parent.createDiv({ cls: "github-link-pr-run-info" });
+
+		if (report.build) {
+			const short = (sha: string) => sha.slice(0, 7);
+			info.createSpan({ text: "Run on" });
+			info.createEl("a", {
+				cls: "github-link-pr-run-commit",
+				text: short(report.build.commit),
+				href: `${pull.url}/commits/${report.build.commit}`,
+				attr: { target: "_blank" },
+			});
+			if (runFreshness(report.build, pull.headSha) === "latest") {
+				this.chip(info, "success", "latest commit");
+			} else {
+				this.chip(info, "attention", "not the latest commit");
+				info.createSpan({ text: "head is" });
+				info.createEl("a", {
+					cls: "github-link-pr-run-commit",
+					text: short(pull.headSha),
+					href: `${pull.url}/commits/${pull.headSha}`,
+					attr: { target: "_blank" },
+				});
+			}
+		}
+
+		if (report.at) {
+			const at = report.at;
+			const age = info.createSpan({ cls: "github-link-pr-run-age", attr: { title: at } });
+			bindCountdown(age, () => `finished ${relativeTime(at)}`);
 		}
 	}
 

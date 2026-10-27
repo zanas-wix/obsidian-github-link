@@ -19,6 +19,7 @@ const response: PullDetailResponse = {
 			author,
 			baseRefName: "main",
 			headRefName: "feat/pages",
+			headRefOid: "f3f673bc36762a49ee083bb067f2e2878828a569",
 			additions: 10,
 			deletions: 2,
 			changedFiles: 2,
@@ -104,6 +105,7 @@ describe("parsePullDetail", () => {
 			mergeState: "DIRTY",
 			baseRef: "main",
 			headRef: "feat/pages",
+			headSha: "f3f673bc36762a49ee083bb067f2e2878828a569",
 			requestedReviewers: ["bob", "core-team"],
 		});
 	});

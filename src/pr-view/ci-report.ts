@@ -26,6 +26,8 @@ export interface CiReport {
 	previews: DeployPreview[];
 	/** Null when the comment does not carry both (it is not a Falcon run comment) */
 	build: CiBuild | null;
+	/** When the bot posted the comment, which is when the run finished; null for a bare body */
+	at: string | null;
 }
 
 /**
@@ -34,7 +36,7 @@ export interface CiReport {
  */
 const REPORT_MARKER = /re-trigger the build|validation failures|<summary[^>]*>\s*deploy previews/i;
 
-export function parseCiReport(body: string): CiReport {
+export function parseCiReport(body: string, at: string | null = null): CiReport {
 	const lines = body.split("\n");
 
 	const failureRows = tableAfter(
@@ -62,7 +64,7 @@ export function parseCiReport(body: string): CiReport {
 		}
 	}
 
-	return { failures, previews, build: parseCiBuild(body) };
+	return { failures, previews, build: parseCiBuild(body), at };
 }
 
 const COMMIT_LINK = /\/commits\/([0-9a-f]{40})\b/;
@@ -86,6 +88,14 @@ export function screenshotDiffUrl(ref: PullRef, build: CiBuild): string {
 	return `https://bo.wix.com/sheshesh-v3/${ref.repo}/${ref.number}/${build.commit.slice(0, 7)}-${build.buildId}`;
 }
 
+/**
+ * Whether a CI run was for the pull request's newest commit. "unknown" when the comment named no commit.
+ */
+export function runFreshness(build: CiBuild | null, headSha: string): "latest" | "outdated" | "unknown" {
+	if (!build) return "unknown";
+	return build.commit === headSha ? "latest" : "outdated";
+}
+
 /** Only the sled3 end-to-end jobs produce screenshot diffs */
 export function hasScreenshotDiffs(failure: ValidationFailure): boolean {
 	return /sled/i.test(failure.validation);
@@ -98,7 +108,7 @@ export function hasScreenshotDiffs(failure: ValidationFailure): boolean {
 export function findCiReport(timeline: TimelineItem[]): CiReport | null {
 	for (const item of [...timeline].reverse()) {
 		if (item.kind === "comment" && REPORT_MARKER.test(item.body)) {
-			const report = parseCiReport(item.body);
+			const report = parseCiReport(item.body, item.at);
 			return report.failures.length > 0 || report.previews.length > 0 ? report : null;
 		}
 	}

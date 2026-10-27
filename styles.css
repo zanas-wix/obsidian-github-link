@@ -1266,3 +1266,21 @@ a.github-link-pr-file:hover {
 		height: 18px;
 	}
 }
+
+/* Which commit the CI run was for, and how long ago */
+.github-link-pr-run-info {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 6px;
+	margin-bottom: 6px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+.github-link-pr-run-commit {
+	font-family: var(--font-monospace);
+}
+.github-link-pr-run-age {
+	margin-inline-start: auto;
+	font-variant-numeric: tabular-nums;
+}

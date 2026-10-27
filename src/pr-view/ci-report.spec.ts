@@ -7,6 +7,7 @@ import {
 	parseCiBuild,
 	parseCiReport,
 	queryParams,
+	runFreshness,
 	screenshotDiffUrl,
 } from "./ci-report";
 
@@ -68,7 +69,7 @@ describe("parseCiReport", () => {
 	});
 
 	it("finds nothing in an ordinary comment", () => {
-		expect(parseCiReport("Looks good to me")).toEqual({ failures: [], previews: [], build: null });
+		expect(parseCiReport("Looks good to me")).toEqual({ failures: [], previews: [], build: null, at: null });
 	});
 });
 
@@ -139,5 +140,29 @@ describe("screenshot diff link", () => {
 	it("applies to sled3 jobs only", () => {
 		expect(hasScreenshotDiffs({ pkg: "p", validation: "test:sled3 script", logUrl: null })).toBe(true);
 		expect(hasScreenshotDiffs({ pkg: "p", validation: "test:types script", logUrl: null })).toBe(false);
+	});
+});
+
+describe("run freshness", () => {
+	const build = { commit: "f3f673bc36762a49ee083bb067f2e2878828a569", buildId: "6888d7a7-cb12-47d9-9c29-81608695a174" };
+
+	it("compares the commit the run built with the PR's newest commit", () => {
+		expect(runFreshness(build, "f3f673bc36762a49ee083bb067f2e2878828a569")).toBe("latest");
+		expect(runFreshness(build, "320368b0000000000000000000000000000000ff")).toBe("outdated");
+	});
+
+	it("is unknown when the comment named no commit", () => {
+		expect(runFreshness(null, "f3f673bc36762a49ee083bb067f2e2878828a569")).toBe("unknown");
+	});
+
+	it("carries the time the bot posted the report, from the comment", () => {
+		const comment: TimelineItem = {
+			kind: "comment",
+			author: { login: "bot", avatarUrl: null },
+			body: BODY,
+			at: "2026-10-27T08:36:48Z",
+			url: "u",
+		};
+		expect(findCiReport([comment])?.at).toBe("2026-10-27T08:36:48Z");
 	});
 });

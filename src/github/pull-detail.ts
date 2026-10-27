@@ -51,6 +51,8 @@ export interface PullDetail {
 	updatedAt: string;
 	baseRef: string;
 	headRef: string;
+	/** Full SHA of the PR's newest commit */
+	headSha: string;
 	additions: number;
 	deletions: number;
 	review: "approved" | "changes-requested" | "review-required" | null;
@@ -86,7 +88,7 @@ export function buildPullDetailQuery(ref: PullRef): string {
 		pullRequest(number: ${ref.number}) {
 			title url body state isDraft merged createdAt updatedAt
 			${author}
-			baseRefName headRefName additions deletions changedFiles
+			baseRefName headRefName headRefOid additions deletions changedFiles
 			reviewDecision mergeable mergeStateStatus
 			id viewerCanEnableAutoMerge viewerCanDisableAutoMerge viewerCanUpdate
 			autoMergeRequest { mergeMethod enabledBy { login } }
@@ -135,6 +137,7 @@ interface RawPull {
 	author?: RawPerson | null;
 	baseRefName: string;
 	headRefName: string;
+	headRefOid: string;
 	additions: number;
 	deletions: number;
 	changedFiles: number;
@@ -248,6 +251,7 @@ export function parsePullDetail(ref: PullRef, data: PullDetailResponse): PullDet
 		updatedAt: pull.updatedAt,
 		baseRef: pull.baseRefName,
 		headRef: pull.headRefName,
+		headSha: pull.headRefOid,
 		additions: pull.additions,
 		deletions: pull.deletions,
 		review:
