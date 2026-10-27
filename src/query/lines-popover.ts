@@ -32,11 +32,26 @@ function load(ref: PullRef): Promise<Breakdown> {
 	return breakdown;
 }
 
+/** Elements that already have the hover behaviour, with the pull request it currently shows */
+const attached = new WeakMap<HTMLElement, { ref: PullRef }>();
+
 /**
  * Show lines added and removed per file group (".ts", ".spec.ts", ...) in a popover while the mouse rests
  * on `el`. The files are fetched on the first hover only.
+ *
+ * A list redraws the same cell on every status refresh, so calling this again for an element that has
+ * the behaviour only updates its pull request. Adding the listeners again would open one more stacked
+ * popover per refresh.
  */
 export function attachLinesBreakdown(el: HTMLElement, ref: PullRef): void {
+	const existing = attached.get(el);
+	if (existing) {
+		existing.ref = ref;
+		return;
+	}
+	const state = { ref };
+	attached.set(el, state);
+
 	let timer: number | null = null;
 	let watchdog: number | null = null;
 	let popover: HTMLElement | null = null;
@@ -60,7 +75,7 @@ export function attachLinesBreakdown(el: HTMLElement, ref: PullRef): void {
 			if (!el.isConnected) hide();
 		}, 1000);
 
-		load(ref).then(
+		load(state.ref).then(
 			(breakdown) => {
 				if (popover !== mine) return;
 				fill(mine, breakdown);
